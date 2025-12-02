@@ -1,5 +1,4 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -137,16 +136,6 @@ export interface Santri {
   guardianId?: number;
 }
 
-export interface Guardian {
-  id: number;
-  name: string;
-  phone?: string;
-  address?: string;
-  relation?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 export interface Paginated<T> {
   data: T[];
   meta?: {
@@ -177,6 +166,33 @@ function buildQueryString(obj?: Record<string, unknown>) {
     )
     .join("&");
   return q ? `?${q}` : "";
+}
+
+export enum Role {
+  SUPERADMIN = "SUPERADMIN",
+  ADMIN = "ADMIN",
+  STUDENT = "STUDENT",
+  TEACHER = "TEACHER",
+  GUARDIAN = "GUARDIAN",
+  MERCHANT = "MERCHANT",
+  STAFF = "STAFF",
+}
+
+export interface Guardian {
+  id: number;
+  name: string;
+  email: string;
+  role: Role.GUARDIAN;
+  phone?: string;
+  santriAsGuardian?: Santri[];
+}
+
+export interface SantriFormData {
+  name: string;
+  gender: string;
+  birthDate: string;
+  address: string;
+  guardianId: string;
 }
 
 export const santriApi = {
@@ -212,6 +228,12 @@ export const santriApi = {
       method: "DELETE",
     });
     return res;
+  },
+
+  async getGuardians() {
+    return await apiFetch(`/users?role=GUARDIAN`, {
+      method: "GET",
+    });
   },
 };
 
@@ -341,14 +363,18 @@ export const paymentsApi = {
     invoiceId: number,
     method: PaymentMethod,
     amount: number
-  ) {
+  ): Promise<{
+    success: boolean;
+    data: DuitkuPaymentResponse;
+    message: string;
+  }> {
     const res = await apiFetch(`/payments/duitku/${invoiceId}/${method}`, {
       method: "POST",
-      body: JSON.stringify({ amount }), // ✅ FIX
+      body: JSON.stringify(amount),
     });
-
     return res;
   },
+
   async createRecurringInvoice(
     payload: CreateRecurringInvoiceDto
   ): Promise<{ success: boolean; data: Invoice; message: string }> {
@@ -1281,5 +1307,388 @@ export const canteenApi = {
         error: "Gagal mengambil data transaksi",
       };
     }
+  },
+};
+
+// Di file api.ts, tambahkan interface dan API untuk Audit Trail
+
+export interface AuditTrail {
+  id: number;
+  module: string;
+  action: string;
+  recordId?: number | null;
+  userId?: number | null;
+  note?: string | null;
+  createdAt: string | Date;
+  updatedAt?: string | Date;
+  user?: {
+    id: number;
+    name: string;
+    email: string;
+    role?: string;
+  };
+}
+
+export interface CreateAuditDto {
+  module: string;
+  action: string;
+  recordId?: number;
+  userId?: number;
+  note?: string;
+}
+
+// Tambahkan ke API functions
+export const auditApi = {
+  // Buat audit log baru
+  async create(payload: CreateAuditDto) {
+    const res = await apiFetch(`/audit-trail`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  // Dapatkan semua audit log
+  async list(params?: {
+    page?: number;
+    per_page?: number;
+    module?: string;
+    userId?: number;
+  }) {
+    const qs = buildQueryString(params);
+    const res = await apiFetch(`/audit-trail${qs}`, {
+      method: "GET",
+    });
+    return res as Paginated<AuditTrail> | { data: AuditTrail[] };
+  },
+
+  // Dapatkan audit log by module
+  async getByModule(module: string) {
+    const res = await apiFetch(`/audit-trail/module/${module}`, {
+      method: "GET",
+    });
+    return res as AuditTrail[];
+  },
+
+  // Utility function untuk log action
+  async logAction(params: {
+    module: string;
+    action: string;
+    recordId?: number;
+    userId?: number;
+    note?: string;
+  }) {
+    return this.create(params);
+  },
+};
+
+// Tambahkan interface untuk Academic Module di api.ts
+
+// Academic Subject
+export interface AcademicSubject {
+  id: number;
+  name: string;
+  description?: string;
+  teacherId?: number;
+  createdAt: string | Date;
+  updatedAt?: string | Date;
+  teacher?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
+// Academic Grade
+export interface AcademicGrade {
+  id: number;
+  santriId: number;
+  subjectId: number;
+  score: number;
+  remarks?: string;
+  semester: number;
+  year: number;
+  createdAt: string | Date;
+  updatedAt?: string | Date;
+  santri?: {
+    id: number;
+    name: string;
+  };
+  subject?: {
+    id: number;
+    name: string;
+  };
+}
+
+// Attendance
+export enum AttendanceStatus {
+  PRESENT = "PRESENT",
+  ABSENT = "ABSENT",
+  SICK = "SICK",
+  PERMITTED = "PERMITTED", // Ganti PERMIT dengan PERMITTED
+}
+
+export interface Attendance {
+  id: number;
+  santriId: number;
+  date: string | Date;
+  status: AttendanceStatus; // Gunakan enum di sini
+  remarks?: string;
+  recordedBy?: number;
+  createdAt: string | Date;
+  updatedAt?: string | Date;
+  santri?: {
+    id: number;
+    name: string;
+  };
+  teacher?: {
+    id: number;
+    name: string;
+  };
+}
+
+// DTO untuk Create/Update
+export interface CreateSubjectDto {
+  name: string;
+  description?: string;
+  teacherId?: number;
+}
+
+export interface CreateGradeDto {
+  santriId: number;
+  subjectId: number;
+  score: number;
+  remarks?: string;
+  semester: number;
+  year: number;
+}
+
+export interface CreateAttendanceDto {
+  santriId: number;
+  date: string;
+  status: AttendanceStatus; // Gunakan enum di sini
+  remarks?: string;
+  recordedBy?: number;
+}
+
+// Tambahkan API functions untuk Academic Module
+export const academicApi = {
+  async listAttendance(params?: {
+    skip?: number;
+    take?: number;
+    santriId?: number;
+    date?: string;
+    status?: AttendanceStatus;
+  }) {
+    const qs = buildQueryString(params);
+    const res = await apiFetch(`/academic/attendance${qs}`, {
+      method: "GET",
+    });
+    return res as Attendance[] | { data: Attendance[] };
+  },
+  async listGrades(params?: {
+    skip?: number;
+    take?: number;
+    santriId?: number;
+    subjectId?: number;
+  }) {
+    const qs = buildQueryString(params);
+    const res = await apiFetch(`/academic/grade${qs}`, {
+      method: "GET",
+    });
+    return res as AcademicGrade[] | { data: AcademicGrade[] };
+  },
+  async createSubject(payload: CreateSubjectDto) {
+    const res = await apiFetch(`/academic/subject`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async listSubjects(params?: {
+    skip?: number;
+    take?: number;
+    teacherId?: number;
+  }) {
+    const qs = buildQueryString(params);
+    const res = await apiFetch(`/academic/subject${qs}`, {
+      method: "GET",
+    });
+    return res as AcademicSubject[] | { data: AcademicSubject[] };
+  },
+
+  async getSubject(id: number) {
+    const res = await apiFetch(`/academic/subject/${id}`, {
+      method: "GET",
+    });
+    return res as AcademicSubject;
+  },
+
+  async updateSubject(id: number, payload: Partial<CreateSubjectDto>) {
+    const res = await apiFetch(`/academic/subject/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async deleteSubject(id: number) {
+    const res = await apiFetch(`/academic/subject/${id}`, {
+      method: "DELETE",
+    });
+    return res;
+  },
+
+  // Grades
+  async createGrade(payload: CreateGradeDto) {
+    const res = await apiFetch(`/academic/grade`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async getGradesBySantri(santriId: number) {
+    const res = await apiFetch(`/academic/grades/santri/${santriId}`, {
+      method: "GET",
+    });
+    return res as AcademicGrade[] | { data: AcademicGrade[] };
+  },
+
+  async getGrade(id: number) {
+    const res = await apiFetch(`/academic/grade/${id}`, {
+      method: "GET",
+    });
+    return res as AcademicGrade;
+  },
+
+  async updateGrade(id: number, payload: Partial<CreateGradeDto>) {
+    const res = await apiFetch(`/academic/grade/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async deleteGrade(id: number) {
+    const res = await apiFetch(`/academic/grade/${id}`, {
+      method: "DELETE",
+    });
+    return res;
+  },
+
+  // Attendance
+  async createAttendance(payload: CreateAttendanceDto) {
+    const res = await apiFetch(`/academic/attendance`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async getAttendanceBySantri(santriId: number) {
+    const res = await apiFetch(`/academic/attendance/santri/${santriId}`, {
+      method: "GET",
+    });
+    return res as Attendance[] | { data: Attendance[] };
+  },
+
+  async getAttendance(id: number) {
+    const res = await apiFetch(`/academic/attendance/${id}`, {
+      method: "GET",
+    });
+    return res as Attendance;
+  },
+
+  async updateAttendance(id: number, payload: Partial<CreateAttendanceDto>) {
+    const res = await apiFetch(`/academic/attendance/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    return res;
+  },
+
+  async deleteAttendance(id: number) {
+    const res = await apiFetch(`/academic/attendance/${id}`, {
+      method: "DELETE",
+    });
+    return res;
+  },
+
+  // Stats
+  async getStats() {
+    const res = await apiFetch(`/academic/stats`, {
+      method: "GET",
+    });
+    return res as {
+      totalSubjects: number;
+      totalGrades: number;
+      totalAttendance: number;
+      averageScore: number;
+    };
+  },
+
+  // Bulk operations
+  async bulkCreateGrades(payloads: CreateGradeDto[]) {
+    const res = await apiFetch(`/academic/grade/bulk`, {
+      method: "POST",
+      body: JSON.stringify(payloads),
+    });
+    return res;
+  },
+
+  async bulkCreateAttendance(payloads: CreateAttendanceDto[]) {
+    const res = await apiFetch(`/academic/attendance/bulk`, {
+      method: "POST",
+      body: JSON.stringify(payloads),
+    });
+    return res;
+  },
+};
+
+// Tambahkan interface yang hilang di bagian Academic Module
+export interface CreateGradeInput {
+  santriId: number;
+  subjectId: number;
+  score: number;
+  remarks?: string;
+  semester: number;
+  year: number;
+}
+
+export interface UpdateGradeInput {
+  score?: number;
+  remarks?: string;
+}
+
+export interface CreateAttendanceInput {
+  santriId: number;
+  date: string;
+  status: "PRESENT" | "ABSENT" | "SICK" | "PERMITTED";
+  remarks?: string;
+  recordedBy: number;
+}
+
+export interface UpdateAttendanceInput {
+  status?: "PRESENT" | "ABSENT" | "SICK" | "PERMITTED";
+  remarks?: string;
+}
+
+// Tambahkan interface untuk Teachers
+export interface Teacher {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+}
+
+// Tambahkan function untuk mendapatkan teachers
+export const teachersApi = {
+  async list() {
+    const res = await apiFetch(`/users?role=TEACHER`, {
+      method: "GET",
+    });
+    return res as { data: Teacher[] } | Teacher[];
   },
 };

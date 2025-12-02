@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { santriApi, type Santri, type Guardian } from "@/lib/api";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, User, Edit2 } from "lucide-react";
+
+interface UpdateSantriData {
+  name?: string;
+  gender?: string;
+  birthDate?: string;
+  address?: string;
+  guardianId?: number;
+}
 
 export default function EditSantriPage() {
   const { id } = useParams();
@@ -20,13 +28,38 @@ export default function EditSantriPage() {
       try {
         // Fetch santri data
         const santriResponse = await santriApi.get(Number(id));
-        setForm(santriResponse.data);
+        const santri = santriResponse.data;
 
-        // Fetch guardians list
-        const guardiansResponse = (await santriApi.getGuardians?.()) || {
-          data: [],
-        };
-        setGuardians(guardiansResponse.data || []);
+        setForm({
+          name: santri.name,
+          gender: santri.gender,
+          birthDate: santri.birthDate ? santri.birthDate.split("T")[0] : "",
+          address: santri.address,
+          guardianId: santri.guardianId,
+        });
+
+        try {
+          const guardiansResponse = await santriApi.getGuardians();
+          // Handle different possible response formats
+          if (Array.isArray(guardiansResponse)) {
+            setGuardians(guardiansResponse);
+          } else if (
+            guardiansResponse &&
+            typeof guardiansResponse === "object" &&
+            "data" in guardiansResponse
+          ) {
+            setGuardians(
+              Array.isArray(guardiansResponse.data)
+                ? guardiansResponse.data
+                : []
+            );
+          } else {
+            setGuardians([]);
+          }
+        } catch (guardianError) {
+          console.error("Failed to fetch guardians:", guardianError);
+          setGuardians([]);
+        }
       } catch (error) {
         console.error("Failed to fetch data:", error);
       } finally {
@@ -35,26 +68,63 @@ export default function EditSantriPage() {
       }
     };
 
-    fetchData();
+    if (id) {
+      fetchData();
+    }
   }, [id]);
 
-  const handleChange = (e: any) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
 
-  async function handleSubmit(e: any) {
+  // Fungsi untuk membersihkan data sebelum dikirim
+  const prepareUpdateData = (formData: Partial<Santri>): UpdateSantriData => {
+    const updateData: UpdateSantriData = {};
+
+    // Hanya kirim field yang ada nilainya dan sesuai dengan DTO
+    if (formData.name !== undefined) updateData.name = formData.name;
+    if (formData.gender !== undefined) updateData.gender = formData.gender;
+    if (formData.birthDate !== undefined)
+      updateData.birthDate = formData.birthDate;
+    if (formData.address !== undefined) updateData.address = formData.address;
+
+    // Handle guardianId khusus
+    if (formData.guardianId !== undefined && formData.guardianId !== null) {
+      updateData.guardianId = Number(formData.guardianId);
+    } else if (formData.guardianId === "") {
+      // Jika guardianId di-set ke string kosong, kirim undefined
+      updateData.guardianId = undefined;
+    }
+
+    return updateData;
+  };
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    // Validasi field wajib
+    if (!form.name || !form.gender || !form.birthDate || !form.address) {
+      alert("Harap lengkapi semua field yang wajib diisi");
+      return;
+    }
+
     setLoading(true);
+
     try {
-      const submitData = {
-        ...form,
-        guardianId: form.guardianId
-          ? parseInt(form.guardianId as any)
-          : undefined,
-      };
-      await santriApi.update(Number(id), submitData);
+      // Siapkan data yang akan dikirim
+      const updateData = prepareUpdateData(form);
+
+      // Kirim update request
+      await santriApi.update(Number(id), updateData);
+
+      // Redirect ke halaman santri
       router.push("/santri");
+      router.refresh(); // Refresh untuk update data terbaru
     } catch (error) {
-      console.error(error);
+      console.error("Update failed:", error);
       alert("Gagal mengupdate santri");
     } finally {
       setLoading(false);
@@ -65,6 +135,15 @@ export default function EditSantriPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Ensure id is not undefined
+  if (!id) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-600">ID santri tidak valid</div>
       </div>
     );
   }
@@ -106,6 +185,7 @@ export default function EditSantriPage() {
               Nama Lengkap *
             </label>
             <input
+              type="text"
               name="name"
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"

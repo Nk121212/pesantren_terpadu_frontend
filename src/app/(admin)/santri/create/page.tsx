@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { santriApi, type Guardian } from "@/lib/api";
+import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import { santriApi, type Guardian, type SantriFormData } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, UserPlus } from "lucide-react";
 import Link from "next/link";
@@ -12,7 +12,7 @@ export default function CreateSantriPage() {
   const [guardians, setGuardians] = useState<Guardian[]>([]);
   const [guardiansLoading, setGuardiansLoading] = useState(true);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<SantriFormData>({
     name: "",
     gender: "",
     birthDate: "",
@@ -24,12 +24,23 @@ export default function CreateSantriPage() {
     // Fetch list of guardians for dropdown
     const fetchGuardians = async () => {
       try {
-        // Assuming you have a guardianApi or can get guardians from santriApi
-        // This is a placeholder - adjust based on your actual API
-        const response = (await santriApi.getGuardians?.()) || { data: [] };
-        setGuardians(response.data || []);
+        const response = await santriApi.getGuardians();
+
+        // Handle different response formats
+        if (Array.isArray(response)) {
+          setGuardians(response);
+        } else if (
+          response &&
+          typeof response === "object" &&
+          "data" in response
+        ) {
+          setGuardians(Array.isArray(response.data) ? response.data : []);
+        } else {
+          setGuardians([]);
+        }
       } catch (error) {
         console.error("Failed to fetch guardians:", error);
+        setGuardians([]);
       } finally {
         setGuardiansLoading(false);
       }
@@ -38,22 +49,39 @@ export default function CreateSantriPage() {
     fetchGuardians();
   }, []);
 
-  const handleChange = (e: any) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
 
-  async function handleSubmit(e: any) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    // Validate required fields
+    if (!form.name || !form.gender || !form.birthDate || !form.address) {
+      alert("Harap lengkapi semua field yang wajib diisi");
+      return;
+    }
+
     setLoading(true);
+
     try {
       const submitData = {
-        ...form,
-        guardianId: form.guardianId ? parseInt(form.guardianId) : undefined,
+        name: form.name,
+        gender: form.gender,
+        birthDate: form.birthDate,
+        address: form.address,
+        guardianId: form.guardianId ? Number(form.guardianId) : undefined,
       };
+
       await santriApi.create(submitData);
       router.push("/santri");
+      router.refresh(); // Refresh the page to show new data
     } catch (error) {
-      console.error(error);
-      alert("Gagal menambah santri");
+      console.error("Create failed:", error);
+      alert("Gagal menambah santri. Silakan coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -88,6 +116,7 @@ export default function CreateSantriPage() {
               Nama Lengkap *
             </label>
             <input
+              type="text"
               name="name"
               required
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
