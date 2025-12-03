@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { academicApi, type AcademicGrade } from "@/lib/api";
+import { academicApi, type AcademicGrade, type Paginated } from "@/lib/api";
 import Link from "next/link";
 import {
   Award,
@@ -16,7 +16,22 @@ import {
   Trash2,
   TrendingUp,
   BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  AlertCircle,
 } from "lucide-react";
+
+interface GradesResponse {
+  success: boolean;
+  data: AcademicGrade[];
+  meta: {
+    total: number;
+    skip: number;
+    take: number;
+    hasMore: boolean;
+  };
+}
 
 export default function GradesPage() {
   const [loading, setLoading] = useState(true);
@@ -24,66 +39,185 @@ export default function GradesPage() {
   const [search, setSearch] = useState("");
   const [semesterFilter, setSemesterFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("");
+  const [subjectFilter, setSubjectFilter] = useState("");
+  const [santriFilter, setSantriFilter] = useState("");
 
-  // Placeholder data
-  const [gradesData, setGradesData] = useState<AcademicGrade[]>([
-    {
-      id: 1,
-      santriId: 1,
-      subjectId: 1,
-      score: 85.5,
-      remarks: "Sangat baik",
-      semester: 1,
-      year: 2024,
-      createdAt: "2024-01-15T08:00:00.000Z",
-      santri: { id: 1, name: "Ahmad Fahmi" },
-      subject: { id: 1, name: "Matematika" },
-    },
-    {
-      id: 2,
-      santriId: 2,
-      subjectId: 1,
-      score: 90.0,
-      remarks: "Istimewa",
-      semester: 1,
-      year: 2024,
-      createdAt: "2024-01-15T08:00:00.000Z",
-      santri: { id: 2, name: "Siti Aminah" },
-      subject: { id: 1, name: "Matematika" },
-    },
-  ]);
+  // State untuk data grades
+  const [gradesData, setGradesData] = useState<AcademicGrade[]>([]);
+  const [pagination, setPagination] = useState({
+    skip: 0,
+    take: 10,
+    total: 0,
+    hasMore: false,
+  });
+  const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
+  const [santris, setSantris] = useState<{ id: number; name: string }[]>([]);
 
-  const fetchGrades = async () => {
+  // Fetch initial data
+  useEffect(() => {
+    fetchGrades();
+    fetchSubjects();
+    fetchSantris();
+  }, []);
+
+  // Fetch grades dengan filter
+  const fetchGrades = async (resetPagination = false) => {
     try {
+      if (resetPagination) {
+        setPagination((prev) => ({ ...prev, skip: 0 }));
+      }
+
       setRefreshing(true);
-      // TODO: Implement actual API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const params: Record<string, string | number> = {
+        skip: resetPagination ? 0 : pagination.skip,
+        take: pagination.take,
+      };
+
+      // Tambahkan filter jika ada
+      if (santriFilter) params.santriId = santriFilter;
+      if (subjectFilter) params.subjectId = subjectFilter;
+      if (semesterFilter !== "all") params.semester = semesterFilter;
+      if (yearFilter) params.year = yearFilter;
+
+      const response = await academicApi.listGrades(params);
+      //   console.log(response);
+      const responseNew = response.data;
+      console.log(responseNew);
+
+      // Handle response format
+      let grades: AcademicGrade[] = [];
+      let total = 0;
+
+      if (Array.isArray(responseNew)) {
+        grades = responseNew;
+        total = responseNew.length;
+      } else if (responseNew && typeof responseNew === "object") {
+        if ("data" in responseNew && Array.isArray(responseNew.data)) {
+          grades = responseNew.data;
+        }
+        if (
+          "meta" in responseNew &&
+          responseNew.meta &&
+          "total" in responseNew.meta
+        ) {
+          total = responseNew.meta.total as number;
+        }
+      }
+
+      setGradesData(grades);
+      setPagination((prev) => ({
+        ...prev,
+        total,
+        hasMore: (resetPagination ? 0 : prev.skip) + prev.take < total,
+      }));
     } catch (error) {
       console.error("Failed to fetch grades:", error);
+      alert("Gagal mengambil data nilai");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchGrades();
-  }, []);
+  // Fetch subjects untuk filter
+  const fetchSubjects = async () => {
+    try {
+      const response = await academicApi.listSubjects();
+      let subjectsData: { id: number; name: string }[] = [];
 
+      if (Array.isArray(response)) {
+        subjectsData = response.map((subj) => ({
+          id: subj.id,
+          name: subj.name,
+        }));
+      } else if (
+        response &&
+        typeof response === "object" &&
+        "data" in response &&
+        Array.isArray(response.data)
+      ) {
+        subjectsData = response.data.map((subj: any) => ({
+          id: subj.id,
+          name: subj.name,
+        }));
+      }
+
+      setSubjects(subjectsData);
+    } catch (error) {
+      console.error("Failed to fetch subjects:", error);
+    }
+  };
+
+  // Fetch santris untuk filter
+  const fetchSantris = async () => {
+    try {
+      // Anda perlu menyesuaikan dengan API yang ada
+      // Contoh menggunakan santriApi jika ada
+      const response = await import("@/lib/api").then((api) =>
+        api.santriApi.list({ per_page: 100 })
+      );
+
+      let santrisData: { id: number; name: string }[] = [];
+
+      if (Array.isArray(response)) {
+        santrisData = response.map((s) => ({ id: s.id, name: s.name }));
+      } else if (
+        response &&
+        typeof response === "object" &&
+        "data" in response &&
+        Array.isArray(response.data)
+      ) {
+        santrisData = response.data.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+        }));
+      }
+
+      setSantris(santrisData);
+    } catch (error) {
+      console.error("Failed to fetch santris:", error);
+    }
+  };
+
+  // Handle delete grade
   const handleDelete = async (id: number) => {
     if (!confirm("Hapus nilai ini?")) return;
 
     try {
-      // TODO: Implement delete API
-      // await academicApi.deleteGrade(id);
-      setGradesData((prev) => prev.filter((item) => item.id !== id));
-    } catch (error) {
+      await academicApi.deleteGrade(id);
+      alert("Nilai berhasil dihapus");
+      fetchGrades(true); // Refresh dengan reset pagination
+    } catch (error: any) {
       console.error("Failed to delete grade:", error);
-      alert("Gagal menghapus nilai");
+      alert(error.message || "Gagal menghapus nilai");
     }
   };
 
+  // Handle pagination
+  const handleNextPage = () => {
+    if (pagination.hasMore) {
+      setPagination((prev) => ({
+        ...prev,
+        skip: prev.skip + prev.take,
+      }));
+      fetchGrades();
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (pagination.skip > 0) {
+      setPagination((prev) => ({
+        ...prev,
+        skip: Math.max(0, prev.skip - prev.take),
+      }));
+      fetchGrades();
+    }
+  };
+
+  // Filter local (jika masih mau pakai client-side filtering)
   const filteredGrades = gradesData.filter((grade) => {
+    console.log("filteredGrades " + grade);
     const matchesSearch =
       search === "" ||
       grade.santri?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -98,8 +232,9 @@ export default function GradesPage() {
     return matchesSearch && matchesSemester && matchesYear;
   });
 
+  // Calculate stats
   const stats = {
-    total: gradesData.length,
+    total: pagination.total,
     average:
       gradesData.length > 0
         ? gradesData.reduce((acc, grade) => acc + grade.score, 0) /
@@ -109,6 +244,21 @@ export default function GradesPage() {
       gradesData.length > 0 ? Math.max(...gradesData.map((g) => g.score)) : 0,
     lowest:
       gradesData.length > 0 ? Math.min(...gradesData.map((g) => g.score)) : 0,
+  };
+
+  // Apply filters (trigger API call)
+  const applyFilters = () => {
+    fetchGrades(true);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setSearch("");
+    setSemesterFilter("all");
+    setYearFilter("");
+    setSubjectFilter("");
+    setSantriFilter("");
+    fetchGrades(true);
   };
 
   if (loading && gradesData.length === 0) {
@@ -128,19 +278,28 @@ export default function GradesPage() {
             <Award className="w-7 h-7 text-blue-600" />
             Nilai & Rapor
           </h1>
-          <p className="text-gray-600 mt-1">Kelola nilai akademik santri</p>
+          <p className="text-gray-600 mt-1">
+            {pagination.total} data nilai ditemukan
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={fetchGrades}
+            onClick={() => fetchGrades(true)}
             disabled={refreshing}
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium disabled:opacity-50"
           >
             <RefreshCw
               className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
             />
-            Refresh
+            {refreshing ? "Memuat..." : "Refresh"}
+          </button>
+          <button
+            onClick={resetFilters}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+          >
+            <Filter className="w-4 h-4" />
+            Reset Filter
           </button>
           <Link
             href="/academic/grades/create"
@@ -216,8 +375,9 @@ export default function GradesPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cari
@@ -234,6 +394,51 @@ export default function GradesPage() {
             </div>
           </div>
 
+          {/* Santri Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Santri
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <select
+                value={santriFilter}
+                onChange={(e) => setSantriFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+              >
+                <option value="">Semua Santri</option>
+                {santris.map((santri) => (
+                  <option key={santri.id} value={santri.id}>
+                    {santri.name} (ID: {santri.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Subject Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mata Pelajaran
+            </label>
+            <div className="relative">
+              <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <select
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none"
+              >
+                <option value="">Semua Pelajaran</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Semester Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Semester
@@ -251,7 +456,11 @@ export default function GradesPage() {
               </select>
             </div>
           </div>
+        </div>
 
+        {/* Row 2 Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Year Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Tahun Ajaran
@@ -267,14 +476,66 @@ export default function GradesPage() {
                 <option value="2024">2024</option>
                 <option value="2023">2023</option>
                 <option value="2022">2022</option>
+                <option value="2021">2021</option>
+                <option value="2020">2020</option>
               </select>
             </div>
+          </div>
+
+          {/* Items Per Page */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Data per Halaman
+            </label>
+            <select
+              value={pagination.take}
+              onChange={(e) => {
+                setPagination((prev) => ({
+                  ...prev,
+                  take: Number(e.target.value),
+                  skip: 0,
+                }));
+                fetchGrades(true);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+
+          {/* Apply Filters Button */}
+          <div className="flex items-end">
+            <button
+              onClick={applyFilters}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+            >
+              Terapkan Filter
+            </button>
           </div>
         </div>
       </div>
 
       {/* Grades Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <span className="text-sm text-gray-600">
+              Menampilkan {Math.min(pagination.skip + 1, pagination.total)}-
+              {Math.min(pagination.skip + pagination.take, pagination.total)}{" "}
+              dari {pagination.total} data
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -290,6 +551,9 @@ export default function GradesPage() {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Semester/Tahun
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Tanggal Input
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Keterangan
@@ -342,24 +606,34 @@ export default function GradesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <p className="text-sm text-gray-600 max-w-xs">
+                    <span className="text-sm text-gray-600">
+                      {grade.createdAt
+                        ? new Date(grade.createdAt).toLocaleDateString("id-ID")
+                        : "-"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-sm text-gray-600 max-w-xs truncate">
                       {grade.remarks || "-"}
                     </p>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button
+                      <Link
+                        href={`/academic/grades/${grade.id}`}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                         title="Detail"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
-                      <button
+                      </Link>
+
+                      <Link
+                        href={`/academic/grades/${grade.id}/edit`}
                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
                         title="Edit"
                       >
                         <Edit className="w-4 h-4" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleDelete(grade.id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
@@ -375,22 +649,63 @@ export default function GradesPage() {
           </table>
         </div>
 
+        {/* Pagination */}
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div>
+            <span className="text-sm text-gray-600">
+              Halaman {Math.floor(pagination.skip / pagination.take) + 1} dari{" "}
+              {Math.ceil(pagination.total / pagination.take)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrevPage}
+              disabled={pagination.skip === 0}
+              className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Sebelumnya
+            </button>
+            <button
+              onClick={handleNextPage}
+              disabled={!pagination.hasMore}
+              className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Selanjutnya
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Empty State */}
         {filteredGrades.length === 0 && (
           <div className="text-center py-12">
             <Award className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500 text-lg">Tidak ada data nilai</p>
             <p className="text-sm text-gray-400 mt-1">
-              {search || semesterFilter !== "all" || yearFilter
+              {search ||
+              semesterFilter !== "all" ||
+              yearFilter ||
+              subjectFilter ||
+              santriFilter
                 ? "Coba ubah filter pencarian"
                 : "Mulai dengan menginput nilai santri"}
             </p>
-            <Link
-              href="/academic/grades/create"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium mt-4"
-            >
-              <Plus className="w-4 h-4" />
-              Input Nilai Pertama
-            </Link>
+            <div className="flex gap-3 justify-center mt-4">
+              <button
+                onClick={resetFilters}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Reset Filter
+              </button>
+              <Link
+                href="/academic/grades/create"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Input Nilai Pertama
+              </Link>
+            </div>
           </div>
         )}
       </div>

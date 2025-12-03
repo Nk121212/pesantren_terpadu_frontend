@@ -1425,7 +1425,7 @@ export enum AttendanceStatus {
   PRESENT = "PRESENT",
   ABSENT = "ABSENT",
   SICK = "SICK",
-  PERMITTED = "PERMITTED", // Ganti PERMIT dengan PERMITTED
+  PERMIT = "PERMIT", // Ganti PERMIT dengan PERMITTED
 }
 
 export interface Attendance {
@@ -1471,8 +1471,157 @@ export interface CreateAttendanceDto {
   recordedBy?: number;
 }
 
+export interface LogActionResponse {
+  success: boolean;
+  data?: {
+    id?: number;
+    module?: string;
+    action?: string;
+    [key: string]: unknown;
+  };
+  error?: string;
+}
+
 // Tambahkan API functions untuk Academic Module
 export const academicApi = {
+  // academicApi object di api.ts
+
+  async logAction(params: {
+    module: string;
+    action: string;
+    recordId?: number;
+    userId?: number;
+    note?: string;
+  }): Promise<LogActionResponse> {
+    try {
+      // Coba gunakan auditApi jika tersedia
+      if (auditApi && typeof auditApi.create === "function") {
+        // Buat payload yang sesuai dengan DTO backend
+        const auditPayload: any = {
+          module: params.module,
+          action: params.action,
+        };
+
+        // Hanya tambahkan properti jika ada nilainya
+        if (params.recordId !== undefined) {
+          auditPayload.recordId = params.recordId;
+        }
+
+        if (params.userId !== undefined) {
+          auditPayload.userId = params.userId;
+        }
+
+        if (params.note) {
+          auditPayload.note = params.note;
+        }
+
+        const auditResult = await auditApi.create(auditPayload);
+
+        // Handle different response formats
+        if (auditResult && typeof auditResult === "object") {
+          if ("success" in auditResult && auditResult.success) {
+            return {
+              success: true,
+              data: auditResult.data || params,
+            };
+          } else if ("id" in auditResult) {
+            return {
+              success: true,
+              data: auditResult,
+            };
+          }
+        }
+
+        return {
+          success: true,
+          data: auditResult || params,
+        };
+      }
+
+      // Fallback: log ke console jika auditApi tidak tersedia
+      console.log("Audit Log:", params);
+      return {
+        success: true,
+        data: params,
+      };
+    } catch (error) {
+      console.error("Failed to log action:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Failed to log audit action",
+        };
+      }
+      return {
+        success: false,
+        error: "Failed to log audit action",
+      };
+    }
+  },
+
+  async createGrade(payload: CreateGradeDto) {
+    try {
+      console.log("Creating grade with payload:", payload);
+
+      // Pastikan tipe data sesuai dengan DTO
+      const cleanPayload = {
+        santriId: Number(payload.santriId),
+        subjectId: Number(payload.subjectId),
+        score: Number(payload.score),
+        remarks: payload.remarks || undefined,
+        semester: Number(payload.semester),
+        year: Number(payload.year),
+      };
+
+      console.log("Clean payload:", cleanPayload);
+
+      const response = await fetch(`${API_BASE_URL}/academic/grade`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(cleanPayload),
+      });
+
+      console.log("Response status:", response.status);
+
+      const responseText = await response.text();
+      console.log("Response text:", responseText);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          // Keep original error message
+        }
+        throw new Error(errorMessage);
+      }
+
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error("Invalid JSON response from server");
+      }
+
+      console.log("Parsed result:", result);
+
+      // Handle different response formats
+      if (result.success && result.data) {
+        return result.data;
+      } else if (result.id) {
+        return result;
+      } else {
+        return result;
+      }
+    } catch (error) {
+      console.error("Error creating grade:", error);
+      throw error;
+    }
+  },
   async listAttendance(params?: {
     skip?: number;
     take?: number;
@@ -1489,14 +1638,46 @@ export const academicApi = {
   async listGrades(params?: {
     skip?: number;
     take?: number;
-    santriId?: number;
-    subjectId?: number;
+    santriId?: string | number;
+    subjectId?: string | number;
+    semester?: string | number;
+    year?: string | number;
   }) {
-    const qs = buildQueryString(params);
-    const res = await apiFetch(`/academic/grade${qs}`, {
-      method: "GET",
-    });
-    return res as AcademicGrade[] | { data: AcademicGrade[] };
+    try {
+      const queryParams = new URLSearchParams();
+
+      if (params?.skip !== undefined)
+        queryParams.append("skip", params.skip.toString());
+      if (params?.take !== undefined)
+        queryParams.append("take", params.take.toString());
+      if (params?.santriId)
+        queryParams.append("santriId", params.santriId.toString());
+      if (params?.subjectId)
+        queryParams.append("subjectId", params.subjectId.toString());
+      if (params?.semester)
+        queryParams.append("semester", params.semester.toString());
+      if (params?.year) queryParams.append("year", params.year.toString());
+
+      const queryString = queryParams.toString();
+      const url = `/academic/grade${queryString ? `?${queryString}` : ""}`;
+
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching grades:", error);
+      throw error;
+    }
   },
   async createSubject(payload: CreateSubjectDto) {
     const res = await apiFetch(`/academic/subject`, {
@@ -1536,15 +1717,6 @@ export const academicApi = {
   async deleteSubject(id: number) {
     const res = await apiFetch(`/academic/subject/${id}`, {
       method: "DELETE",
-    });
-    return res;
-  },
-
-  // Grades
-  async createGrade(payload: CreateGradeDto) {
-    const res = await apiFetch(`/academic/grade`, {
-      method: "POST",
-      body: JSON.stringify(payload),
     });
     return res;
   },
@@ -1665,13 +1837,13 @@ export interface UpdateGradeInput {
 export interface CreateAttendanceInput {
   santriId: number;
   date: string;
-  status: "PRESENT" | "ABSENT" | "SICK" | "PERMITTED";
+  status: "PRESENT" | "ABSENT" | "SICK" | "PERMIT";
   remarks?: string;
   recordedBy: number;
 }
 
 export interface UpdateAttendanceInput {
-  status?: "PRESENT" | "ABSENT" | "SICK" | "PERMITTED";
+  status?: "PRESENT" | "ABSENT" | "SICK" | "PERMIT";
   remarks?: string;
 }
 

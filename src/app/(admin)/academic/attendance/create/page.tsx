@@ -1,24 +1,299 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, ClipboardCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  Calendar,
+  User,
+  AlertCircle,
+  Loader2,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
+import {
+  academicApi,
+  AttendanceStatus,
+  CreateAttendanceDto,
+  santriApi,
+  Santri,
+  teachersApi,
+  Teacher,
+} from "@/lib/api";
 
 export default function CreateAttendancePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [santriList, setSantriList] = useState<Santri[]>([]);
+  const [teacherList, setTeacherList] = useState<Teacher[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formData, setFormData] = useState({
+    santriId: "",
+    date: new Date().toISOString().split("T")[0], // Today's date as default
+    status: AttendanceStatus.PRESENT,
+    remarks: "",
+    recordedBy: "",
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch santri list
+      const santriRes = await santriApi.list({ per_page: 100 });
+
+      if (santriRes) {
+        let santriData: Santri[] = [];
+
+        if (
+          "success" in santriRes &&
+          santriRes.success &&
+          Array.isArray(santriRes.data)
+        ) {
+          santriData = santriRes.data;
+        } else if (Array.isArray(santriRes)) {
+          santriData = santriRes;
+        } else if ("data" in santriRes && Array.isArray(santriRes.data)) {
+          santriData = santriRes.data;
+        }
+
+        setSantriList(santriData);
+      }
+
+      // Fetch teacher list
+      const teacherRes = await teachersApi.list();
+
+      if (teacherRes) {
+        let teacherData: Teacher[] = [];
+
+        if (
+          "success" in teacherRes &&
+          teacherRes.success &&
+          Array.isArray(teacherRes.data)
+        ) {
+          teacherData = teacherRes.data;
+        } else if (Array.isArray(teacherRes)) {
+          teacherData = teacherRes;
+        } else if ("data" in teacherRes && Array.isArray(teacherRes.data)) {
+          teacherData = teacherRes.data;
+        }
+
+        setTeacherList(teacherData);
+
+        // Set default recordedBy to first teacher if available
+        if (teacherData.length > 0 && !formData.recordedBy) {
+          setFormData((prev) => ({
+            ...prev,
+            recordedBy: teacherData[0].id.toString(),
+          }));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      alert("Gagal mengambil data santri dan guru");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.santriId) {
+      newErrors.santriId = "Santri harus dipilih";
+    }
+
+    if (!formData.date) {
+      newErrors.date = "Tanggal harus diisi";
+    }
+
+    if (!formData.status) {
+      newErrors.status = "Status kehadiran harus dipilih";
+    }
+
+    if (!formData.recordedBy) {
+      newErrors.recordedBy = "Pencatat harus dipilih";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  // Di handleSubmit di Create Page, ubah format date:
+
+  // Di handleSubmit di Create Page, tambahkan redirect:
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    // TODO: Implement create attendance
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    router.push("/academic/attendance");
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      // Convert date to ISO string dengan time component
+      const dateString = new Date(
+        formData.date + "T00:00:00.000Z"
+      ).toISOString();
+
+      const payload: CreateAttendanceDto = {
+        santriId: Number(formData.santriId),
+        date: dateString,
+        status: formData.status as AttendanceStatus,
+        remarks: formData.remarks || undefined,
+        recordedBy: Number(formData.recordedBy),
+      };
+
+      console.log("Sending payload:", payload);
+
+      const result = await academicApi.createAttendance(payload);
+
+      let attendanceId: number | undefined;
+
+      // Extract attendance ID from response
+      if (result && typeof result === "object") {
+        if (
+          "success" in result &&
+          result.success &&
+          result.data &&
+          "id" in result.data
+        ) {
+          attendanceId = result.data.id;
+        } else if ("id" in result) {
+          attendanceId = result.id;
+        }
+      }
+
+      // Log audit trail
+      try {
+        const santriName =
+          santriList.find((s) => s.id === Number(formData.santriId))?.name ||
+          "Unknown";
+
+        await academicApi.logAction({
+          module: "ATTENDANCE",
+          action: "CREATE",
+          recordId: attendanceId,
+          note: `Membuat absensi baru untuk santri: ${santriName} (ID: ${formData.santriId})`,
+        });
+      } catch (auditError) {
+        console.error("Failed to log audit:", auditError);
+      }
+
+      alert("Absensi berhasil dibuat!");
+
+      // Kembali ke halaman utama/list absensi
+      router.push("/academic/attendance");
+    } catch (error) {
+      console.error("Failed to create attendance:", error);
+
+      if (error instanceof Error) {
+        if (error.message.includes("Foreign key constraint")) {
+          alert("Santri atau guru tidak ditemukan. Pastikan data valid.");
+        } else if (error.message.includes("ISO-8601")) {
+          alert("Format tanggal tidak valid. Gunakan format YYYY-MM-DD.");
+        } else {
+          alert(`Gagal membuat absensi: ${error.message}`);
+        }
+      } else {
+        alert("Gagal membuat absensi. Silakan coba lagi.");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
+  const getStatusIcon = (status: AttendanceStatus) => {
+    switch (status) {
+      case AttendanceStatus.PRESENT:
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case AttendanceStatus.SICK:
+      case AttendanceStatus.PERMITTED:
+        return <Clock className="w-5 h-5 text-yellow-600" />;
+      case AttendanceStatus.ABSENT:
+        return <XCircle className="w-5 h-5 text-red-600" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusColor = (status: AttendanceStatus): string => {
+    switch (status) {
+      case AttendanceStatus.PRESENT:
+        return "bg-green-100 text-green-800 border-green-200";
+      case AttendanceStatus.SICK:
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case AttendanceStatus.PERMITTED:
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case AttendanceStatus.ABSENT:
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const statusOptions = [
+    {
+      value: AttendanceStatus.PRESENT,
+      label: "Hadir",
+      description: "Santri hadir sesuai jadwal",
+      icon: <CheckCircle className="w-5 h-5 text-green-600" />,
+    },
+    {
+      value: AttendanceStatus.SICK,
+      label: "Sakit",
+      description: "Santri tidak hadir karena sakit",
+      icon: <Clock className="w-5 h-5 text-yellow-600" />,
+    },
+    {
+      value: AttendanceStatus.PERMIT,
+      label: "Izin",
+      description: "Santri izin dengan alasan tertentu",
+      icon: <Clock className="w-5 h-5 text-blue-600" />,
+    },
+    {
+      value: AttendanceStatus.ABSENT,
+      label: "Absen",
+      description: "Santri tidak hadir tanpa keterangan",
+      icon: <XCircle className="w-5 h-5 text-red-600" />,
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Link
           href="/academic/attendance"
@@ -27,35 +302,220 @@ export default function CreateAttendancePage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ClipboardCheck className="w-6 h-6 text-green-600" />
-            Tambah Absensi
+          <h1 className="text-2xl font-bold text-gray-900">
+            Tambah Absensi Santri
           </h1>
-          <p className="text-gray-600 mt-1">Rekam kehadiran santri</p>
+          <p className="text-gray-600 mt-1">
+            Rekam kehadiran santri untuk hari ini
+          </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <p className="text-center py-12 text-gray-500">
-          Form input absensi akan segera hadir
-        </p>
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6">
+            Data Absensi Baru
+          </h2>
+
+          <div className="space-y-6">
+            {/* Santri Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Santri <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  name="santriId"
+                  value={formData.santriId}
+                  onChange={handleChange}
+                  required
+                  className={`w-full pl-11 pr-4 py-3 border ${
+                    errors.santriId ? "border-red-300" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none bg-white`}
+                >
+                  <option value="">Pilih Santri</option>
+                  {santriList.map((santri) => (
+                    <option key={santri.id} value={santri.id}>
+                      {santri.name} (
+                      {santri.gender === "Pria" ? "Laki-laki" : "Perempuan"})
+                    </option>
+                  ))}
+                </select>
+                {errors.santriId && (
+                  <p className="mt-1 text-sm text-red-600">{errors.santriId}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tanggal <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  required
+                  className={`w-full pl-11 pr-4 py-3 border ${
+                    errors.date ? "border-red-300" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500`}
+                />
+                {errors.date && (
+                  <p className="mt-1 text-sm text-red-600">{errors.date}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Status Selection with Cards */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Status Kehadiran <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                {statusOptions.map((statusOption) => (
+                  <div
+                    key={`status-${statusOption.value}`} // Tambahkan prefix untuk lebih unik
+                    className={`cursor-pointer p-4 rounded-lg border-2 transition-all ${
+                      formData.status === statusOption.value
+                        ? getStatusColor(statusOption.value)
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        status: statusOption.value as AttendanceStatus,
+                      }));
+                      if (errors.status) {
+                        setErrors((prev) => ({ ...prev, status: "" }));
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      {statusOption.icon}
+                      <span className="font-semibold">
+                        {statusOption.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      {statusOption.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {errors.status && (
+                <p className="mt-1 text-sm text-red-600">{errors.status}</p>
+              )}
+            </div>
+
+            {/* Recorded By */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Dicatat Oleh <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  name="recordedBy"
+                  value={formData.recordedBy}
+                  onChange={handleChange}
+                  required
+                  className={`w-full pl-11 pr-4 py-3 border ${
+                    errors.recordedBy ? "border-red-300" : "border-gray-300"
+                  } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none bg-white`}
+                >
+                  <option value="">Pilih Pencatat</option>
+                  {teacherList.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.name} ({teacher.role})
+                    </option>
+                  ))}
+                </select>
+                {errors.recordedBy && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.recordedBy}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Remarks */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Keterangan (Opsional)
+              </label>
+              <textarea
+                name="remarks"
+                value={formData.remarks}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Masukkan keterangan tambahan jika diperlukan..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                Contoh: `Hadir tepat waktu`, `Izin sakit dengan surat dokter`,
+                `Izin keluarga penting`, `dll`.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-medium text-yellow-800 mb-1">
+                Catatan Penting
+              </h3>
+              <ul className="text-sm text-yellow-700 space-y-1">
+                <li>• Pastikan data yang diisi sudah benar sebelum disimpan</li>
+                <li>
+                  • Status kehadiran akan mempengaruhi laporan dan statistik
+                </li>
+                <li>
+                  • Data yang sudah disimpan dapat diedit nanti jika diperlukan
+                </li>
+                <li>
+                  • Sistem akan mencatat siapa yang membuat entri absensi ini
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
         <div className="flex gap-3 pt-4">
           <Link
             href="/academic/attendance"
             className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-center"
           >
-            Kembali
+            Batal
           </Link>
           <button
-            onClick={handleSubmit}
-            disabled={loading}
+            type="submit"
+            disabled={saving}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50"
           >
-            <Save className="w-4 h-4" />
-            {loading ? "Menyimpan..." : "Simpan"}
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Menyimpan...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Simpan Absensi
+              </>
+            )}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

@@ -1,8 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { type Attendance, AttendanceStatus } from "@/lib/api";
+import {
+  type Attendance,
+  AttendanceStatus,
+  academicApi,
+  santriApi,
+  Santri,
+} from "@/lib/api";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ClipboardCheck,
   Search,
@@ -17,6 +24,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Loader2,
 } from "lucide-react";
 
 export default function AttendancePage() {
@@ -24,35 +32,78 @@ export default function AttendancePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  const [attendanceData, setAttendanceData] = useState<Attendance[]>([
-    {
-      id: 1,
-      santriId: 1,
-      date: "2024-01-15",
-      status: AttendanceStatus.PRESENT,
-      remarks: "Hadir tepat waktu",
-      recordedBy: 1,
-      createdAt: "2024-01-15T08:00:00.000Z",
-      santri: { id: 1, name: "Ahmad Fahmi" },
-    },
-    {
-      id: 2,
-      santriId: 2,
-      date: "2024-01-15",
-      status: AttendanceStatus.SICK,
-      remarks: "Izin sakit",
-      recordedBy: 1,
-      createdAt: "2024-01-15T08:00:00.000Z",
-      santri: { id: 2, name: "Siti Aminah" },
-    },
-  ]);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
+  const [santriMap, setSantriMap] = useState<Record<number, Santri>>({});
 
   const fetchAttendance = async () => {
     try {
       setRefreshing(true);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Build params object with proper types
+      const params: {
+        skip?: number;
+        take?: number;
+        search?: string;
+        date?: string;
+        status?: AttendanceStatus;
+      } = {
+        take: 100,
+      };
+
+      if (search) params.search = search;
+      if (dateFilter) params.date = dateFilter;
+      if (statusFilter !== "all") {
+        // Type assertion karena statusFilter adalah string
+        params.status = statusFilter as AttendanceStatus;
+      }
+
+      const attendanceRes = await academicApi.listAttendance(params);
+      const attendanceResNew = attendanceRes?.data;
+
+      let attendances: Attendance[] = [];
+      if (attendanceResNew && typeof attendanceResNew === "object") {
+        if (
+          "data" in attendanceResNew &&
+          Array.isArray(attendanceResNew.data)
+        ) {
+          attendances = attendanceResNew.data;
+        } else if (Array.isArray(attendanceResNew)) {
+          attendances = attendanceResNew;
+        } else if (
+          "success" in attendanceResNew &&
+          attendanceResNew.success &&
+          Array.isArray(attendanceResNew.data)
+        ) {
+          attendances = attendanceResNew.data;
+        }
+      }
+
+      setAttendanceData(attendances);
+
+      // Fetch santri details for mapping
+      const santriIds = Array.from(new Set(attendances.map((a) => a.santriId)));
+      if (santriIds.length > 0) {
+        const newSantriMap: Record<number, Santri> = {};
+
+        // Fetch each santri individually
+        for (const santriId of santriIds) {
+          try {
+            const santriRes = await santriApi.get(santriId);
+            if (santriRes && typeof santriRes === "object") {
+              if ("data" in santriRes) {
+                newSantriMap[santriId] = santriRes.data as Santri;
+              } else if ("id" in santriRes) {
+                newSantriMap[santriId] = santriRes as Santri;
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to fetch santri ${santriId}:`, error);
+          }
+        }
+
+        setSantriMap(newSantriMap);
+      }
     } catch (error) {
       console.error("Failed to fetch attendance:", error);
     } finally {
@@ -65,53 +116,101 @@ export default function AttendancePage() {
     fetchAttendance();
   }, []);
 
-  const getStatusColor = (status: string) => {
+  useEffect(() => {
+    // Debounce search
+    const timer = setTimeout(() => {
+      fetchAttendance();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search, dateFilter, statusFilter]);
+
+  const getStatusColor = (status: AttendanceStatus): string => {
     switch (status) {
-      case "PRESENT":
+      case AttendanceStatus.PRESENT:
         return "bg-green-100 text-green-800";
-      case "SICK":
+      case AttendanceStatus.SICK:
         return "bg-yellow-100 text-yellow-800";
-      case "PERMIT":
+      case AttendanceStatus.PERMITTED:
         return "bg-blue-100 text-blue-800";
-      case "ABSENT":
+      case AttendanceStatus.ABSENT:
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: AttendanceStatus) => {
     switch (status) {
-      case "PRESENT":
-        return <CheckCircle className="w-4 h-4" />;
-      case "SICK":
-      case "PERMIT":
-        return <Clock className="w-4 h-4" />;
-      case "ABSENT":
-        return <XCircle className="w-4 h-4" />;
+      case AttendanceStatus.PRESENT:
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case AttendanceStatus.SICK:
+        return <Clock className="w-4 h-4 text-yellow-600" />;
+      case AttendanceStatus.PERMITTED:
+        return <Clock className="w-4 h-4 text-blue-600" />;
+      case AttendanceStatus.ABSENT:
+        return <XCircle className="w-4 h-4 text-red-600" />;
       default:
         return null;
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Hapus data absensi ini?")) return;
+  // Di handleDelete di Detail Page, tambahkan error handling yang lebih baik:
+
+  const handleDelete = async () => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data absensi ini?")) return;
 
     try {
-      setAttendanceData((prev) => prev.filter((item) => item.id !== id));
+      setDeleting(true);
+      const id = Number(params.id);
+      await academicApi.deleteAttendance(id);
+
+      // Log audit trail
+      try {
+        const auditResponse = await academicApi.logAction({
+          module: "ATTENDANCE",
+          action: "DELETE",
+          recordId: id,
+          note: `Menghapus absensi ID: ${id}`,
+        });
+
+        if (!auditResponse.success) {
+          console.warn("Audit logging failed:", auditResponse.error);
+        }
+      } catch (auditError) {
+        console.error("Failed to log audit:", auditError);
+      }
+
+      alert("Absensi berhasil dihapus");
+
+      // Kembali ke halaman utama/list absensi
+      router.push("/academic/attendance");
     } catch (error) {
       console.error("Failed to delete attendance:", error);
-      alert("Gagal menghapus data absensi");
+
+      if (error instanceof Error) {
+        alert(`Gagal menghapus absensi: ${error.message}`);
+      } else {
+        alert("Gagal menghapus absensi. Silakan coba lagi.");
+      }
+    } finally {
+      setDeleting(false);
     }
   };
 
   const filteredAttendance = attendanceData.filter((attendance) => {
+    const santri = santriMap[attendance.santriId];
+    const santriName = santri?.name?.toLowerCase() || "";
+    const remarks = attendance.remarks?.toLowerCase() || "";
+
     const matchesSearch =
       search === "" ||
-      attendance.santri?.name?.toLowerCase().includes(search.toLowerCase()) ||
-      attendance.remarks?.toLowerCase().includes(search.toLowerCase());
+      santriName.includes(search.toLowerCase()) ||
+      remarks.includes(search.toLowerCase());
 
-    const matchesDate = !dateFilter || attendance.date === dateFilter;
+    const matchesDate =
+      !dateFilter ||
+      new Date(attendance.date).toISOString().split("T")[0] === dateFilter;
 
     const matchesStatus =
       statusFilter === "all" || attendance.status === statusFilter;
@@ -121,19 +220,36 @@ export default function AttendancePage() {
 
   const stats = {
     total: attendanceData.length,
-    present: attendanceData.filter((a) => a.status === "PRESENT").length,
-    absent: attendanceData.filter((a) => a.status === "ABSENT").length,
-    sick: attendanceData.filter((a) => a.status === "SICK").length,
-    permit: attendanceData.filter((a) => a.status === "PERMITTED").length,
+    present: attendanceData.filter((a) => a.status === AttendanceStatus.PRESENT)
+      .length,
+    absent: attendanceData.filter((a) => a.status === AttendanceStatus.ABSENT)
+      .length,
+    sick: attendanceData.filter((a) => a.status === AttendanceStatus.SICK)
+      .length,
+    permitted: attendanceData.filter(
+      (a) => a.status === AttendanceStatus.PERMITTED
+    ).length,
   };
 
   if (loading && attendanceData.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+        <Loader2 className="w-12 h-12 text-green-600 animate-spin" />
       </div>
     );
   }
+
+  const formatDate = (dateString: string | Date): string => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Invalid Date";
+      }
+      return date.toLocaleDateString("id-ID");
+    } catch {
+      return "Invalid Date";
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -217,7 +333,7 @@ export default function AttendancePage() {
             <div>
               <p className="text-sm font-medium text-gray-600">Izin</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {stats.permit}
+                {stats.permitted}
               </p>
             </div>
             <div className="p-2 bg-blue-100 rounded-full">
@@ -287,10 +403,10 @@ export default function AttendancePage() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none"
               >
                 <option value="all">Semua Status</option>
-                <option value="PRESENT">Hadir</option>
-                <option value="SICK">Sakit</option>
-                <option value="PERMIT">Izin</option>
-                <option value="ABSENT">Absen</option>
+                <option value={AttendanceStatus.PRESENT}>Hadir</option>
+                <option value={AttendanceStatus.SICK}>Sakit</option>
+                <option value={AttendanceStatus.PERMITTED}>Izin</option>
+                <option value={AttendanceStatus.ABSENT}>Absen</option>
               </select>
             </div>
           </div>
@@ -324,78 +440,86 @@ export default function AttendancePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredAttendance.map((attendance) => (
-                <tr key={attendance.id} className="hover:bg-gray-50 transition">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {attendance.santri?.name || "Unknown"}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          ID: {attendance.santriId}
-                        </p>
+              {filteredAttendance.map((attendance) => {
+                const santri = santriMap[attendance.santriId];
+                return (
+                  <tr
+                    key={attendance.id}
+                    className="hover:bg-gray-50 transition"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <User className="w-4 h-4 text-gray-400" />
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {santri?.name || "Loading..."}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            ID: {attendance.santriId}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">
-                        {new Date(attendance.date).toLocaleDateString("id-ID")}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-gray-600">
+                          {formatDate(attendance.date)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(attendance.status)}
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            attendance.status
+                          )}`}
+                        >
+                          {attendance.status === AttendanceStatus.PERMITTED
+                            ? "IZIN"
+                            : attendance.status}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-gray-600 max-w-xs truncate">
+                        {attendance.remarks || "-"}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-gray-600">
+                        {formatDate(attendance.createdAt)}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(attendance.status)}
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          attendance.status
-                        )}`}
-                      >
-                        {attendance.status}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-gray-600 max-w-xs">
-                      {attendance.remarks || "-"}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm text-gray-600">
-                      {new Date(attendance.createdAt).toLocaleDateString(
-                        "id-ID"
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="Detail"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(attendance.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Hapus"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/academic/attendance/${attendance.id}`}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="Detail"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Link>
+                        <Link
+                          href={`/academic/attendance/${attendance.id}/edit`}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(attendance.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
