@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -24,6 +24,50 @@ import {
   Teacher,
 } from "@/lib/api";
 
+// Type guard untuk response API
+function isApiResponseWithData<T>(
+  response: unknown
+): response is { data: T[]; success?: boolean } {
+  if (response === null || typeof response !== "object") {
+    return false;
+  }
+
+  const obj = response as Record<string, unknown>;
+
+  // Check if data exists and is an array
+  if (!("data" in obj) || !Array.isArray(obj.data)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isApiResponseWithSuccess<T>(
+  response: unknown
+): response is { success: true; data: T[] } {
+  if (response === null || typeof response !== "object") {
+    return false;
+  }
+
+  const obj = response as Record<string, unknown>;
+
+  // Check if success is true
+  if (!("success" in obj) || obj.success !== true) {
+    return false;
+  }
+
+  // Check if data exists and is an array
+  if (!("data" in obj) || !Array.isArray(obj.data)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isArrayOf<T>(response: unknown): response is T[] {
+  return Array.isArray(response);
+}
+
 export default function CreateAttendancePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -33,17 +77,13 @@ export default function CreateAttendancePage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     santriId: "",
-    date: new Date().toISOString().split("T")[0], // Today's date as default
+    date: new Date().toISOString().split("T")[0],
     status: AttendanceStatus.PRESENT,
     remarks: "",
     recordedBy: "",
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -53,16 +93,13 @@ export default function CreateAttendancePage() {
       if (santriRes) {
         let santriData: Santri[] = [];
 
-        if (
-          "success" in santriRes &&
-          santriRes.success &&
-          Array.isArray(santriRes.data)
-        ) {
+        // Gunakan type guards yang aman
+        if (isApiResponseWithSuccess<Santri>(santriRes)) {
           santriData = santriRes.data;
-        } else if (Array.isArray(santriRes)) {
+        } else if (isApiResponseWithData<Santri>(santriRes)) {
+          santriData = santriRes.data;
+        } else if (isArrayOf<Santri>(santriRes)) {
           santriData = santriRes;
-        } else if ("data" in santriRes && Array.isArray(santriRes.data)) {
-          santriData = santriRes.data;
         }
 
         setSantriList(santriData);
@@ -74,16 +111,13 @@ export default function CreateAttendancePage() {
       if (teacherRes) {
         let teacherData: Teacher[] = [];
 
-        if (
-          "success" in teacherRes &&
-          teacherRes.success &&
-          Array.isArray(teacherRes.data)
-        ) {
+        // Gunakan type guards yang sama
+        if (isApiResponseWithSuccess<Teacher>(teacherRes)) {
           teacherData = teacherRes.data;
-        } else if (Array.isArray(teacherRes)) {
+        } else if (isApiResponseWithData<Teacher>(teacherRes)) {
+          teacherData = teacherRes.data;
+        } else if (isArrayOf<Teacher>(teacherRes)) {
           teacherData = teacherRes;
-        } else if ("data" in teacherRes && Array.isArray(teacherRes.data)) {
-          teacherData = teacherRes.data;
         }
 
         setTeacherList(teacherData);
@@ -102,7 +136,11 @@ export default function CreateAttendancePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData.recordedBy]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -141,9 +179,13 @@ export default function CreateAttendancePage() {
     }
   };
 
-  // Di handleSubmit di Create Page, ubah format date:
-
-  // Di handleSubmit di Create Page, tambahkan redirect:
+  const handleStatusChange = useCallback((status: AttendanceStatus) => {
+    setFormData((prev) => ({
+      ...prev,
+      status,
+    }));
+    setErrors((prev) => ({ ...prev, status: "" }));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,7 +197,7 @@ export default function CreateAttendancePage() {
     try {
       setSaving(true);
 
-      // Convert date to ISO string dengan time component
+      // Convert date to ISO string
       const dateString = new Date(
         formData.date + "T00:00:00.000Z"
       ).toISOString();
@@ -174,17 +216,17 @@ export default function CreateAttendancePage() {
 
       let attendanceId: number | undefined;
 
-      // Extract attendance ID from response
       if (result && typeof result === "object") {
-        if (
-          "success" in result &&
-          result.success &&
-          result.data &&
-          "id" in result.data
-        ) {
-          attendanceId = result.data.id;
-        } else if ("id" in result) {
-          attendanceId = result.id;
+        // Convert to unknown first, then to Record<string, unknown>
+        const resultObj = result as unknown as Record<string, unknown>;
+
+        if ("success" in resultObj && resultObj.success === true) {
+          const data = resultObj.data as Record<string, unknown> | undefined;
+          if (data && "id" in data && typeof data.id === "number") {
+            attendanceId = data.id;
+          }
+        } else if ("id" in resultObj && typeof resultObj.id === "number") {
+          attendanceId = resultObj.id as number;
         }
       }
 
@@ -227,34 +269,34 @@ export default function CreateAttendancePage() {
     }
   };
 
-  const getStatusIcon = (status: AttendanceStatus) => {
+  const getStatusIcon = useCallback((status: AttendanceStatus) => {
     switch (status) {
       case AttendanceStatus.PRESENT:
         return <CheckCircle className="w-5 h-5 text-green-600" />;
       case AttendanceStatus.SICK:
-      case AttendanceStatus.PERMITTED:
+      case AttendanceStatus.PERMIT:
         return <Clock className="w-5 h-5 text-yellow-600" />;
       case AttendanceStatus.ABSENT:
         return <XCircle className="w-5 h-5 text-red-600" />;
       default:
         return null;
     }
-  };
+  }, []);
 
-  const getStatusColor = (status: AttendanceStatus): string => {
+  const getStatusColor = useCallback((status: AttendanceStatus): string => {
     switch (status) {
       case AttendanceStatus.PRESENT:
         return "bg-green-100 text-green-800 border-green-200";
       case AttendanceStatus.SICK:
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case AttendanceStatus.PERMITTED:
+      case AttendanceStatus.PERMIT:
         return "bg-blue-100 text-blue-800 border-blue-200";
       case AttendanceStatus.ABSENT:
         return "bg-red-100 text-red-800 border-red-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
-  };
+  }, []);
 
   const statusOptions = [
     {
@@ -298,6 +340,7 @@ export default function CreateAttendancePage() {
         <Link
           href="/academic/attendance"
           className="p-2 hover:bg-gray-100 rounded-lg transition"
+          aria-label="Kembali ke daftar absensi"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
@@ -321,12 +364,16 @@ export default function CreateAttendancePage() {
           <div className="space-y-6">
             {/* Santri Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="santriId"
+              >
                 Santri <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
+                  id="santriId"
                   name="santriId"
                   value={formData.santriId}
                   onChange={handleChange}
@@ -334,6 +381,10 @@ export default function CreateAttendancePage() {
                   className={`w-full pl-11 pr-4 py-3 border ${
                     errors.santriId ? "border-red-300" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none bg-white`}
+                  aria-invalid={!!errors.santriId}
+                  aria-describedby={
+                    errors.santriId ? "santriId-error" : undefined
+                  }
                 >
                   <option value="">Pilih Santri</option>
                   {santriList.map((santri) => (
@@ -344,19 +395,25 @@ export default function CreateAttendancePage() {
                   ))}
                 </select>
                 {errors.santriId && (
-                  <p className="mt-1 text-sm text-red-600">{errors.santriId}</p>
+                  <p id="santriId-error" className="mt-1 text-sm text-red-600">
+                    {errors.santriId}
+                  </p>
                 )}
               </div>
             </div>
 
             {/* Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="date"
+              >
                 Tanggal <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
+                  id="date"
                   type="date"
                   name="date"
                   value={formData.date}
@@ -365,9 +422,13 @@ export default function CreateAttendancePage() {
                   className={`w-full pl-11 pr-4 py-3 border ${
                     errors.date ? "border-red-300" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500`}
+                  aria-invalid={!!errors.date}
+                  aria-describedby={errors.date ? "date-error" : undefined}
                 />
                 {errors.date && (
-                  <p className="mt-1 text-sm text-red-600">{errors.date}</p>
+                  <p id="date-error" className="mt-1 text-sm text-red-600">
+                    {errors.date}
+                  </p>
                 )}
               </div>
             </div>
@@ -379,22 +440,18 @@ export default function CreateAttendancePage() {
               </label>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {statusOptions.map((statusOption) => (
-                  <div
-                    key={`status-${statusOption.value}`} // Tambahkan prefix untuk lebih unik
-                    className={`cursor-pointer p-4 rounded-lg border-2 transition-all ${
+                  <button
+                    key={`status-${statusOption.value}`}
+                    type="button"
+                    className={`cursor-pointer p-4 rounded-lg border-2 transition-all text-left ${
                       formData.status === statusOption.value
                         ? getStatusColor(statusOption.value)
                         : "border-gray-200 hover:border-gray-300"
                     }`}
-                    onClick={() => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        status: statusOption.value as AttendanceStatus,
-                      }));
-                      if (errors.status) {
-                        setErrors((prev) => ({ ...prev, status: "" }));
-                      }
-                    }}
+                    onClick={() =>
+                      handleStatusChange(statusOption.value as AttendanceStatus)
+                    }
+                    aria-pressed={formData.status === statusOption.value}
                   >
                     <div className="flex items-center gap-3 mb-2">
                       {statusOption.icon}
@@ -405,22 +462,28 @@ export default function CreateAttendancePage() {
                     <p className="text-xs text-gray-600">
                       {statusOption.description}
                     </p>
-                  </div>
+                  </button>
                 ))}
               </div>
               {errors.status && (
-                <p className="mt-1 text-sm text-red-600">{errors.status}</p>
+                <p id="status-error" className="mt-1 text-sm text-red-600">
+                  {errors.status}
+                </p>
               )}
             </div>
 
             {/* Recorded By */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="recordedBy"
+              >
                 Dicatat Oleh <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
+                  id="recordedBy"
                   name="recordedBy"
                   value={formData.recordedBy}
                   onChange={handleChange}
@@ -428,6 +491,10 @@ export default function CreateAttendancePage() {
                   className={`w-full pl-11 pr-4 py-3 border ${
                     errors.recordedBy ? "border-red-300" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none bg-white`}
+                  aria-invalid={!!errors.recordedBy}
+                  aria-describedby={
+                    errors.recordedBy ? "recordedBy-error" : undefined
+                  }
                 >
                   <option value="">Pilih Pencatat</option>
                   {teacherList.map((teacher) => (
@@ -437,7 +504,10 @@ export default function CreateAttendancePage() {
                   ))}
                 </select>
                 {errors.recordedBy && (
-                  <p className="mt-1 text-sm text-red-600">
+                  <p
+                    id="recordedBy-error"
+                    className="mt-1 text-sm text-red-600"
+                  >
                     {errors.recordedBy}
                   </p>
                 )}
@@ -446,10 +516,14 @@ export default function CreateAttendancePage() {
 
             {/* Remarks */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="remarks"
+              >
                 Keterangan (Opsional)
               </label>
               <textarea
+                id="remarks"
                 name="remarks"
                 value={formData.remarks}
                 onChange={handleChange}
@@ -473,16 +547,16 @@ export default function CreateAttendancePage() {
               <h3 className="font-medium text-yellow-800 mb-1">
                 Catatan Penting
               </h3>
-              <ul className="text-sm text-yellow-700 space-y-1">
-                <li>• Pastikan data yang diisi sudah benar sebelum disimpan</li>
+              <ul className="text-sm text-yellow-700 space-y-1 list-disc pl-4">
+                <li>Pastikan data yang diisi sudah benar sebelum disimpan</li>
                 <li>
-                  • Status kehadiran akan mempengaruhi laporan dan statistik
+                  Status kehadiran akan mempengaruhi laporan dan statistik
                 </li>
                 <li>
-                  • Data yang sudah disimpan dapat diedit nanti jika diperlukan
+                  Data yang sudah disimpan dapat diedit nanti jika diperlukan
                 </li>
                 <li>
-                  • Sistem akan mencatat siapa yang membuat entri absensi ini
+                  Sistem akan mencatat siapa yang membuat entri absensi ini
                 </li>
               </ul>
             </div>

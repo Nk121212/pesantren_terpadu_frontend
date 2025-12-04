@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,6 +22,7 @@ import {
   Attendance,
   AttendanceStatus,
   santriApi,
+  Santri, // Import Santri type
 } from "@/lib/api";
 
 export default function AttendanceDetailPage() {
@@ -30,13 +31,9 @@ export default function AttendanceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [attendance, setAttendance] = useState<Attendance | null>(null);
-  const [santri, setSantri] = useState<any>(null);
+  const [santri, setSantri] = useState<Santri | null>(null);
 
-  useEffect(() => {
-    fetchAttendance();
-  }, [params.id]);
-
-  const fetchAttendance = async () => {
+  const fetchAttendance = useCallback(async () => {
     try {
       setLoading(true);
       const id = Number(params.id);
@@ -47,11 +44,32 @@ export default function AttendanceDetailPage() {
       if (attendanceRes && typeof attendanceRes === "object") {
         let attendanceData: Attendance;
 
-        // Handle response format
         if ("data" in attendanceRes && attendanceRes.data) {
-          attendanceData = attendanceRes.data;
+          const potentialData = attendanceRes.data as Partial<Attendance>;
+          if (
+            potentialData.id !== undefined &&
+            potentialData.santriId !== undefined &&
+            potentialData.date !== undefined &&
+            potentialData.status !== undefined
+          ) {
+            attendanceData = potentialData as Attendance;
+          } else {
+            console.error("Invalid attendance data format:", potentialData);
+            return;
+          }
         } else {
-          attendanceData = attendanceRes as Attendance;
+          const potentialData = attendanceRes as Partial<Attendance>;
+          if (
+            potentialData.id !== undefined &&
+            potentialData.santriId !== undefined &&
+            potentialData.date !== undefined &&
+            potentialData.status !== undefined
+          ) {
+            attendanceData = potentialData as Attendance;
+          } else {
+            console.error("Invalid attendance data format:", potentialData);
+            return;
+          }
         }
 
         setAttendance(attendanceData);
@@ -61,10 +79,24 @@ export default function AttendanceDetailPage() {
           try {
             const santriRes = await santriApi.get(attendanceData.santriId);
             if (santriRes && typeof santriRes === "object") {
-              if ("data" in santriRes) {
-                setSantri(santriRes.data);
+              // Tambahkan type guard untuk santri response
+              if ("data" in santriRes && santriRes.data) {
+                const santriData = santriRes.data as Partial<Santri>;
+                // Validasi minimal properti Santri
+                if (
+                  santriData.id !== undefined &&
+                  santriData.name !== undefined
+                ) {
+                  setSantri(santriData as Santri);
+                }
               } else {
-                setSantri(santriRes);
+                const santriData = santriRes as Partial<Santri>;
+                if (
+                  santriData.id !== undefined &&
+                  santriData.name !== undefined
+                ) {
+                  setSantri(santriData as Santri);
+                }
               }
             }
           } catch (santriError) {
@@ -77,7 +109,11 @@ export default function AttendanceDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   const handleDelete = async () => {
     if (!confirm("Apakah Anda yakin ingin menghapus data absensi ini?")) return;
@@ -99,17 +135,15 @@ export default function AttendanceDetailPage() {
         console.error("Failed to log audit:", auditError);
       }
 
-      //   alert("Absensi berhasil dihapus");
       router.push("/academic/attendance");
     } catch (error) {
       console.error("Failed to delete attendance:", error);
-      //   alert("Gagal menghapus absensi");
     } finally {
       setDeleting(false);
     }
   };
 
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig = useCallback((status: string) => {
     switch (status) {
       case AttendanceStatus.PRESENT:
         return {
@@ -123,7 +157,7 @@ export default function AttendanceDetailPage() {
           icon: <AlertCircle className="w-5 h-5 text-yellow-600" />,
           label: "Sakit",
         };
-      case AttendanceStatus.PERMITTED:
+      case AttendanceStatus.PERMIT:
         return {
           color: "bg-blue-100 text-blue-800 border-blue-200",
           icon: <Clock className="w-5 h-5 text-blue-600" />,
@@ -142,29 +176,41 @@ export default function AttendanceDetailPage() {
           label: status,
         };
     }
-  };
+  }, []);
 
-  const formatDate = (dateString: string | Date) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("id-ID", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
+  const formatDate = useCallback((dateString: string | Date) => {
+    if (!dateString) return "Tanggal tidak tersedia";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Tanggal tidak valid";
+      return date.toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    } catch {
+      return "Format tanggal tidak valid";
+    }
+  }, []);
 
-  const formatDateTime = (dateString: string | Date) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("id-ID", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
+  const formatDateTime = useCallback((dateString: string | Date) => {
+    if (!dateString) return "Tanggal tidak tersedia";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Tanggal tidak valid";
+      return date.toLocaleDateString("id-ID", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Format tanggal tidak valid";
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -222,9 +268,11 @@ export default function AttendanceDetailPage() {
 
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleting}
             className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition font-medium disabled:opacity-50"
+            aria-label="Hapus absensi"
           >
             {deleting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -336,7 +384,9 @@ export default function AttendanceDetailPage() {
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <Calendar className="w-5 h-5 text-gray-400" />
                   <span className="font-medium text-gray-900">
-                    {formatDateTime(attendance.createdAt)}
+                    {attendance.createdAt
+                      ? formatDateTime(attendance.createdAt)
+                      : "Tanggal tidak tersedia"}
                   </span>
                 </div>
               </div>
@@ -360,9 +410,11 @@ export default function AttendanceDetailPage() {
                 <span className="font-medium">Edit Absensi</span>
               </Link>
               <button
+                type="button"
                 onClick={handleDelete}
                 disabled={deleting}
                 className="flex items-center gap-3 p-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition w-full text-left disabled:opacity-50"
+                aria-label="Hapus absensi"
               >
                 {deleting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -378,13 +430,15 @@ export default function AttendanceDetailPage() {
                 <ClipboardCheck className="w-5 h-5" />
                 <span className="font-medium">Tambah Absensi Baru</span>
               </Link>
-              <Link
-                href={`/santri/${attendance.santriId}`}
-                className="flex items-center gap-3 p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition"
-              >
-                <FileText className="w-5 h-5" />
-                <span className="font-medium">Lihat Profil Santri</span>
-              </Link>
+              {attendance.santriId && (
+                <Link
+                  href={`/santri/${attendance.santriId}`}
+                  className="flex items-center gap-3 p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition"
+                >
+                  <FileText className="w-5 h-5" />
+                  <span className="font-medium">Lihat Profil Santri</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -395,15 +449,15 @@ export default function AttendanceDetailPage() {
             </h2>
             <ul className="space-y-3 text-sm text-gray-600">
               <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                 <span>Data absensi dapat diedit jika ada kesalahan input</span>
               </li>
               <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-1.5"></div>
+                <div className="w-2 h-2 bg-red-500 rounded-full mt-1.5 flex-shrink-0"></div>
                 <span>Hapus data hanya jika benar-benar diperlukan</span>
               </li>
               <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
                 <span>Pastikan data sudah sesuai sebelum disimpan</span>
               </li>
             </ul>

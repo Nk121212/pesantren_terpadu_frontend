@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,11 +14,143 @@ import {
 } from "lucide-react";
 import {
   academicApi,
+  Attendance,
   AttendanceStatus,
   CreateAttendanceDto,
   santriApi,
   Santri,
 } from "@/lib/api";
+
+// Helper functions untuk type safety
+function extractDataFromResponse<T>(response: unknown): T[] {
+  if (!response) return [];
+
+  if (Array.isArray(response)) {
+    return response as T[];
+  }
+
+  if (typeof response === "object" && response !== null) {
+    const obj = response as Record<string, unknown>;
+
+    // Format: { success: true, data: T[] }
+    if (
+      "success" in obj &&
+      obj.success === true &&
+      "data" in obj &&
+      Array.isArray(obj.data)
+    ) {
+      return obj.data as T[];
+    }
+
+    // Format: { data: T[] }
+    if ("data" in obj && Array.isArray(obj.data)) {
+      return obj.data as T[];
+    }
+
+    // Format: Paginated { data: T[], meta: ... }
+    if ("data" in obj && Array.isArray(obj.data)) {
+      return obj.data as T[];
+    }
+  }
+
+  return [];
+}
+
+function extractAttendanceFromResponse(response: unknown): Attendance | null {
+  if (!response) return null;
+
+  if (response && typeof response === "object") {
+    const obj = response as Record<string, unknown>;
+
+    // Format 1: { success: true, data: Attendance }
+    if ("success" in obj && obj.success === true && "data" in obj) {
+      const data = obj.data;
+      if (data && typeof data === "object") {
+        return validateAttendanceData(data as Record<string, unknown>);
+      }
+    }
+
+    // Format 2: { data: Attendance }
+    if ("data" in obj) {
+      const data = obj.data;
+      if (data && typeof data === "object") {
+        return validateAttendanceData(data as Record<string, unknown>);
+      }
+    }
+
+    // Format 3: Attendance langsung
+    return validateAttendanceData(obj);
+  }
+
+  return null;
+}
+
+function validateAttendanceData(
+  data: Record<string, unknown>
+): Attendance | null {
+  // Validasi properti minimal
+  if (
+    typeof data.id === "number" &&
+    typeof data.santriId === "number" &&
+    (typeof data.date === "string" || data.date instanceof Date) &&
+    typeof data.status === "string" &&
+    Object.values(AttendanceStatus).includes(data.status as AttendanceStatus)
+  ) {
+    // Type-safe extraction untuk santri
+    let santri: { id: number; name: string } | undefined = undefined;
+    if (data.santri && typeof data.santri === "object") {
+      const santriObj = data.santri as Record<string, unknown>;
+      if (
+        typeof santriObj.id === "number" &&
+        typeof santriObj.name === "string"
+      ) {
+        santri = {
+          id: santriObj.id,
+          name: santriObj.name,
+        };
+      }
+    }
+
+    // Type-safe extraction untuk teacher
+    let teacher: { id: number; name: string } | undefined = undefined;
+    if (data.teacher && typeof data.teacher === "object") {
+      const teacherObj = data.teacher as Record<string, unknown>;
+      if (
+        typeof teacherObj.id === "number" &&
+        typeof teacherObj.name === "string"
+      ) {
+        teacher = {
+          id: teacherObj.id,
+          name: teacherObj.name,
+        };
+      }
+    }
+
+    return {
+      id: data.id as number,
+      santriId: data.santriId as number,
+      date: data.date as string | Date,
+      status: data.status as AttendanceStatus,
+      remarks: typeof data.remarks === "string" ? data.remarks : "",
+      recordedBy:
+        typeof data.recordedBy === "number"
+          ? (data.recordedBy as number)
+          : undefined,
+      createdAt:
+        typeof data.createdAt === "string"
+          ? (data.createdAt as string)
+          : new Date().toISOString(),
+      updatedAt:
+        typeof data.updatedAt === "string"
+          ? (data.updatedAt as string)
+          : new Date().toISOString(),
+      santri,
+      teacher,
+    };
+  }
+
+  return null;
+}
 
 export default function EditAttendancePage() {
   const params = useParams();
@@ -34,67 +166,47 @@ export default function EditAttendancePage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    fetchData();
-  }, [params.id]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const id = Number(params.id);
 
       // Fetch attendance data
       const attendanceRes = await academicApi.getAttendance(id);
+      const attendance = extractAttendanceFromResponse(attendanceRes);
 
-      if (attendanceRes && typeof attendanceRes === "object") {
-        let attendanceData: any;
-
-        // Handle response format
-        if ("data" in attendanceRes && attendanceRes.data) {
-          attendanceData = attendanceRes.data;
-        } else {
-          attendanceData = attendanceRes;
-        }
-
+      if (attendance) {
         // Format date for input field (YYYY-MM-DD)
-        const date = new Date(attendanceData.date);
-        const formattedDate = date.toISOString().split("T")[0];
+        const date = new Date(attendance.date);
+        const formattedDate = isNaN(date.getTime())
+          ? new Date().toISOString().split("T")[0] // Fallback to today if invalid
+          : date.toISOString().split("T")[0];
 
         setFormData({
-          santriId: attendanceData.santriId.toString(),
+          santriId: attendance.santriId.toString(),
           date: formattedDate,
-          status: attendanceData.status,
-          remarks: attendanceData.remarks || "",
+          status: attendance.status,
+          remarks: attendance.remarks || "",
         });
       }
 
       // Fetch santri list
       const santriRes = await santriApi.list({ per_page: 100 });
-
-      if (santriRes && typeof santriRes === "object") {
-        let santriData: Santri[];
-
-        if ("data" in santriRes) {
-          santriData = santriRes.data as Santri[];
-        } else if (Array.isArray(santriRes)) {
-          santriData = santriRes;
-        } else if ("data" in santriRes && Array.isArray(santriRes.data)) {
-          santriData = santriRes.data;
-        } else {
-          santriData = [];
-        }
-
-        setSantriList(santriData);
-      }
+      const santriData = extractDataFromResponse<Santri>(santriRes);
+      setSantriList(santriData);
     } catch (error) {
       console.error("Failed to fetch data:", error);
       alert("Gagal mengambil data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id]);
 
-  const validateForm = () => {
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.santriId) {
@@ -112,8 +224,6 @@ export default function EditAttendancePage() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
-  // Di Edit Page, handleSubmit:
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,6 +322,7 @@ export default function EditAttendancePage() {
           <Link
             href={`/academic/attendance/${params.id}`}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Kembali ke detail absensi"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </Link>
@@ -230,9 +341,11 @@ export default function EditAttendancePage() {
             Batal
           </Link>
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={saving}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50"
+            aria-label="Simpan perubahan"
           >
             {saving ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -254,12 +367,16 @@ export default function EditAttendancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Santri Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="santriId"
+              >
                 Santri <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <select
+                  id="santriId"
                   name="santriId"
                   value={formData.santriId}
                   onChange={handleChange}
@@ -267,6 +384,10 @@ export default function EditAttendancePage() {
                   className={`w-full pl-11 pr-4 py-3 border ${
                     errors.santriId ? "border-red-300" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none bg-white`}
+                  aria-invalid={!!errors.santriId}
+                  aria-describedby={
+                    errors.santriId ? "santriId-error" : undefined
+                  }
                 >
                   <option value="">Pilih Santri</option>
                   {santriList.map((santri) => (
@@ -276,19 +397,25 @@ export default function EditAttendancePage() {
                   ))}
                 </select>
                 {errors.santriId && (
-                  <p className="mt-1 text-sm text-red-600">{errors.santriId}</p>
+                  <p id="santriId-error" className="mt-1 text-sm text-red-600">
+                    {errors.santriId}
+                  </p>
                 )}
               </div>
             </div>
 
             {/* Date */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="date"
+              >
                 Tanggal <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
+                  id="date"
                   type="date"
                   name="date"
                   value={formData.date}
@@ -297,19 +424,27 @@ export default function EditAttendancePage() {
                   className={`w-full pl-11 pr-4 py-3 border ${
                     errors.date ? "border-red-300" : "border-gray-300"
                   } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500`}
+                  aria-invalid={!!errors.date}
+                  aria-describedby={errors.date ? "date-error" : undefined}
                 />
                 {errors.date && (
-                  <p className="mt-1 text-sm text-red-600">{errors.date}</p>
+                  <p id="date-error" className="mt-1 text-sm text-red-600">
+                    {errors.date}
+                  </p>
                 )}
               </div>
             </div>
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="status"
+              >
                 Status Kehadiran <span className="text-red-500">*</span>
               </label>
               <select
+                id="status"
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
@@ -317,23 +452,31 @@ export default function EditAttendancePage() {
                 className={`w-full px-4 py-3 border ${
                   errors.status ? "border-red-300" : "border-gray-300"
                 } rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500`}
+                aria-invalid={!!errors.status}
+                aria-describedby={errors.status ? "status-error" : undefined}
               >
                 <option value={AttendanceStatus.PRESENT}>Hadir</option>
                 <option value={AttendanceStatus.SICK}>Sakit</option>
-                <option value={AttendanceStatus.PERMITTED}>Izin</option>
+                <option value={AttendanceStatus.PERMIT}>Izin</option>
                 <option value={AttendanceStatus.ABSENT}>Absen</option>
               </select>
               {errors.status && (
-                <p className="mt-1 text-sm text-red-600">{errors.status}</p>
+                <p id="status-error" className="mt-1 text-sm text-red-600">
+                  {errors.status}
+                </p>
               )}
             </div>
 
             {/* Remarks */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="remarks"
+              >
                 Keterangan
               </label>
               <textarea
+                id="remarks"
                 name="remarks"
                 value={formData.remarks}
                 onChange={handleChange}
@@ -342,8 +485,8 @@ export default function EditAttendancePage() {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-none"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Contoh: "Hadir tepat waktu", "Izin sakit dengan surat dokter",
-                "Izin keluarga", dll.
+                Contoh: `Hadir tepat waktu`, `Izin sakit dengan surat dokter`,
+                `Izin keluarga`, dll.
               </p>
             </div>
           </div>
@@ -355,12 +498,12 @@ export default function EditAttendancePage() {
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="font-medium text-yellow-800 mb-1">Perhatian</h3>
-              <ul className="text-sm text-yellow-700 space-y-1">
-                <li>• Pastikan data yang diisi sudah benar sebelum disimpan</li>
+              <ul className="text-sm text-yellow-700 space-y-1 list-disc pl-4">
+                <li>Pastikan data yang diisi sudah benar sebelum disimpan</li>
                 <li>
-                  • Data yang sudah disimpan akan mempengaruhi laporan kehadiran
+                  Data yang sudah disimpan akan mempengaruhi laporan kehadiran
                 </li>
-                <li>• Perubahan data akan tercatat dalam sistem</li>
+                <li>Perubahan data akan tercatat dalam sistem</li>
               </ul>
             </div>
           </div>

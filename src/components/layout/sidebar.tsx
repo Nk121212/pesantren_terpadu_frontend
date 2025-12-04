@@ -122,6 +122,11 @@ export default function Sidebar() {
         },
       ],
     },
+    {
+      href: "/counseling",
+      label: "Konseling",
+      icon: Users,
+    },
   ];
 
   const isActive = (href: string, exact: boolean = false) => {

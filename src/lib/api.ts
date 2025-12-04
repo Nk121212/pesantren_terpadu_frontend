@@ -146,6 +146,13 @@ export interface Paginated<T> {
   };
 }
 
+interface ApiResponseWithData<T> {
+  data: T;
+  success?: boolean;
+  message?: string;
+  [key: string]: unknown;
+}
+
 export const dashboardApi = {
   async getSummary() {
     return await apiFetch("/reporting/dashboard-summary", {
@@ -154,18 +161,29 @@ export const dashboardApi = {
   },
 };
 
-function buildQueryString(obj?: Record<string, unknown>) {
+function buildQueryString<T extends Record<string, unknown>>(obj?: T): string {
   if (!obj) return "";
-  const q = Object.entries(obj)
-    .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(
-      ([k, v]) =>
-        `${encodeURIComponent(k)}=${encodeURIComponent(
-          typeof v === "object" ? JSON.stringify(v) : String(v)
-        )}`
-    )
-    .join("&");
-  return q ? `?${q}` : "";
+
+  const params = new URLSearchParams();
+
+  Object.entries(obj).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      if (Array.isArray(value)) {
+        // Handle array values
+        value.forEach((item) => {
+          params.append(key, String(item));
+        });
+      } else if (typeof value === "object") {
+        // Handle nested objects by stringifying
+        params.append(key, JSON.stringify(value));
+      } else {
+        params.append(key, String(value));
+      }
+    }
+  });
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : "";
 }
 
 export enum Role {
@@ -199,7 +217,7 @@ export const santriApi = {
   async list(params?: { page?: number; per_page?: number; q?: string }) {
     const qs = buildQueryString(params);
     const res = await apiFetch(`/santri${qs}`, { method: "GET" });
-    return res as Paginated<Santri> | { data: Santri[] };
+    return res as Paginated<Santri> | ApiResponseWithData<Santri[]>;
   },
 
   async get(id: number) {
@@ -313,109 +331,90 @@ export enum InvoiceStatus {
 }
 
 export const paymentsApi = {
-  async create(
-    payload: CreatePaymentDto
-  ): Promise<{ success: boolean; data: Payment; message: string }> {
+  async create(payload: CreatePaymentDto) {
     const res = await apiFetch(`/payments`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as { success: boolean; data: Payment; message: string };
   },
 
-  async get(
-    id: number
-  ): Promise<{ success: boolean; data: Payment; message: string }> {
+  async get(id: number) {
     const res = await apiFetch(`/payments/${id}`, {
       method: "GET",
     });
-    return res;
+    return res as { success: boolean; data: Payment; message: string };
   },
 
-  async getByInvoice(
-    invoiceId: number
-  ): Promise<{ success: boolean; data: Payment[]; message: string }> {
+  async getByInvoice(invoiceId: number) {
     const res = await apiFetch(`/payments/invoice/${invoiceId}`, {
       method: "GET",
     });
-    return res;
+    return res as { success: boolean; data: Payment[]; message: string };
   },
 
-  async update(
-    id: number,
-    payload: UpdatePaymentDto
-  ): Promise<{ success: boolean; data: Payment; message: string }> {
+  async update(id: number, payload: UpdatePaymentDto) {
     const res = await apiFetch(`/payments/${id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as { success: boolean; data: Payment; message: string };
   },
 
-  async delete(id: number): Promise<{ success: boolean; message: string }> {
+  async delete(id: number) {
     const res = await apiFetch(`/payments/${id}`, {
       method: "DELETE",
     });
-    return res;
+    return res as { success: boolean; message: string };
   },
 
   async createDuitkuPayment(
     invoiceId: number,
     method: PaymentMethod,
     amount: number
-  ): Promise<{
-    success: boolean;
-    data: DuitkuPaymentResponse;
-    message: string;
-  }> {
+  ) {
     const res = await apiFetch(`/payments/duitku/${invoiceId}/${method}`, {
       method: "POST",
       body: JSON.stringify(amount),
     });
-    return res;
+    return res as {
+      success: boolean;
+      data: DuitkuPaymentResponse;
+      message: string;
+    };
   },
 
-  async createRecurringInvoice(
-    payload: CreateRecurringInvoiceDto
-  ): Promise<{ success: boolean; data: Invoice; message: string }> {
+  async createRecurringInvoice(payload: CreateRecurringInvoiceDto) {
     const res = await apiFetch(`/payments/recurring`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as { success: boolean; data: Invoice; message: string };
   },
 
-  async simulateWebhook(
-    payload: unknown
-  ): Promise<{ success: boolean; message: string }> {
+  async simulateWebhook(payload: unknown) {
     const res = await apiFetch(`/payments/webhook`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as { success: boolean; message: string };
   },
 };
 
 export const invoicesApi = {
-  async list(params?: {
-    page?: number;
-    per_page?: number;
-    santriId?: number;
-  }): Promise<Paginated<Invoice>> {
+  async list(params?: { page?: number; per_page?: number; santriId?: number }) {
     const qs = buildQueryString(params);
     const res = await apiFetch(`/invoices${qs}`, {
       method: "GET",
     });
-    return res;
+    return res as Paginated<Invoice>;
   },
 
-  async get(
-    id: number
-  ): Promise<{ success: boolean; data: Invoice; message: string }> {
+  async get(id: number) {
     const res = await apiFetch(`/invoices/${id}`, {
       method: "GET",
     });
-    return res;
+    return res as { success: boolean; data: Invoice; message: string };
   },
 
   async create(payload: {
@@ -423,12 +422,12 @@ export const invoicesApi = {
     amount: number;
     description: string;
     dueDate?: string;
-  }): Promise<{ success: boolean; data: Invoice; message: string }> {
+  }) {
     const res = await apiFetch(`/invoices`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as { success: boolean; data: Invoice; message: string };
   },
 };
 
@@ -501,7 +500,7 @@ export const tabunganApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res };
+      return { success: true, data: res as Savings };
     } catch (error) {
       if (error instanceof Error) {
         return {
@@ -520,13 +519,14 @@ export const tabunganApi = {
     try {
       const res = await apiFetch(`/savings`, { method: "GET" });
 
-      let data = res;
+      let data: unknown = res;
       if (res && typeof res === "object" && "data" in res) {
-        data = res.data;
+        const response = res as ApiResponseWithData<Savings[]>;
+        data = response.data;
       }
 
       if (Array.isArray(data)) {
-        return { success: true, data };
+        return { success: true, data: data as Savings[] };
       } else {
         return {
           success: false,
@@ -576,12 +576,12 @@ export const tabunganApi = {
       if (resultData.success && resultData.data) {
         return {
           success: true,
-          data: resultData.data,
+          data: resultData.data as Savings,
         };
       } else {
         return {
           success: true,
-          data: resultData,
+          data: resultData as Savings,
         };
       }
     } catch (error) {
@@ -605,7 +605,7 @@ export const tabunganApi = {
       const res = await apiFetch(`/savings/balance/${santriId}`, {
         method: "GET",
       });
-      return { success: true, data: res };
+      return { success: true, data: res as SavingsBalance };
     } catch (error) {
       if (error instanceof Error) {
         return {
@@ -636,7 +636,7 @@ export const tabunganApi = {
         body: JSON.stringify(payload),
       });
 
-      return { success: true, data: res };
+      return { success: true, data: res as SavingsTransaction };
     } catch (error) {
       console.error("Error in create transaction:", error);
 
@@ -679,12 +679,12 @@ export const tabunganApi = {
       if (resultData.success && Array.isArray(resultData.data)) {
         return {
           success: true,
-          data: resultData.data,
+          data: resultData.data as SavingsTransaction[],
         };
       } else if (Array.isArray(resultData)) {
         return {
           success: true,
-          data: resultData,
+          data: resultData as SavingsTransaction[],
         };
       } else {
         return {
@@ -718,7 +718,7 @@ export const tabunganApi = {
           body: JSON.stringify(data),
         }
       );
-      return { success: true, data: res };
+      return { success: true, data: res as SavingsTransaction };
     } catch (error) {
       if (error instanceof Error) {
         return {
@@ -827,7 +827,7 @@ export const ppdbApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res };
+      return { success: true, data: res as PpdbApplicant };
     } catch (error) {
       if (error instanceof Error) {
         return {
@@ -874,12 +874,12 @@ export const ppdbApi = {
       if (resultData.success && resultData.data) {
         return {
           success: true,
-          data: resultData.data,
+          data: resultData.data as PpdbDocument,
         };
       } else {
         return {
           success: true,
-          data: resultData,
+          data: resultData as PpdbDocument,
         };
       }
     } catch (error) {
@@ -909,13 +909,14 @@ export const ppdbApi = {
         method: "GET",
       });
 
-      let data = res;
+      let data: unknown = res;
       if (res && typeof res === "object" && "data" in res) {
-        data = res.data;
+        const response = res as ApiResponseWithData<PpdbApplicant[]>;
+        data = response.data;
       }
 
       if (Array.isArray(data)) {
-        return { success: true, data };
+        return { success: true, data: data as PpdbApplicant[] };
       } else {
         return {
           success: false,
@@ -943,12 +944,16 @@ export const ppdbApi = {
         method: "GET",
       });
 
-      let data = res;
+      let data: unknown = res;
       if (res && typeof res === "object" && "data" in res) {
-        data = res.data;
+        const response = res as { data: unknown };
+        data = response.data;
       }
 
-      return { success: true, data };
+      return {
+        success: true,
+        data: data as PpdbApplicant,
+      };
     } catch (error) {
       console.error("Error getting applicant:", error);
       if (error instanceof Error) {
@@ -973,7 +978,7 @@ export const ppdbApi = {
         method: "PATCH",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res };
+      return { success: true, data: res as PpdbApplicant };
     } catch (error) {
       if (error instanceof Error) {
         return {
@@ -1079,7 +1084,7 @@ export const canteenApi = {
       if (result.success && result.data) {
         return {
           success: true,
-          data: result.data,
+          data: result.data as Merchant,
         };
       } else {
         throw new Error(result.message || "Invalid response format");
@@ -1125,7 +1130,7 @@ export const canteenApi = {
       if (result.success && result.data) {
         return {
           success: true,
-          data: result.data,
+          data: result.data as Merchant,
         };
       } else {
         throw new Error(result.message || "Invalid response format");
@@ -1172,7 +1177,7 @@ export const canteenApi = {
       if (result.success && result.data) {
         return {
           success: true,
-          data: Array.isArray(result.data) ? result.data : [],
+          data: Array.isArray(result.data) ? (result.data as Merchant[]) : [],
         };
       } else {
         throw new Error(result.message || "Invalid response format");
@@ -1234,14 +1239,14 @@ export const canteenApi = {
         }
 
         const resultData = await response.json();
-        return { success: true, data: resultData };
+        return { success: true, data: resultData as CanteenTransaction };
       } else {
         // Use JSON without file
         const res = await apiFetch(`/canteen/transaction`, {
           method: "POST",
           body: JSON.stringify(data),
         });
-        return { success: true, data: res };
+        return { success: true, data: res as CanteenTransaction };
       }
     } catch (error) {
       console.error("Error in create transaction:", error);
@@ -1288,7 +1293,9 @@ export const canteenApi = {
       if (result.success && result.data) {
         return {
           success: true,
-          data: Array.isArray(result.data) ? result.data : [],
+          data: Array.isArray(result.data)
+            ? (result.data as CanteenTransaction[])
+            : [],
         };
       } else {
         throw new Error(result.message || "Invalid response format");
@@ -1310,8 +1317,7 @@ export const canteenApi = {
   },
 };
 
-// Di file api.ts, tambahkan interface dan API untuk Audit Trail
-
+// Audit Trail
 export interface AuditTrail {
   id: number;
   module: string;
@@ -1337,7 +1343,6 @@ export interface CreateAuditDto {
   note?: string;
 }
 
-// Tambahkan ke API functions
 export const auditApi = {
   // Buat audit log baru
   async create(payload: CreateAuditDto) {
@@ -1345,7 +1350,7 @@ export const auditApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as AuditTrail | { data: AuditTrail };
   },
 
   // Dapatkan semua audit log
@@ -1382,9 +1387,7 @@ export const auditApi = {
   },
 };
 
-// Tambahkan interface untuk Academic Module di api.ts
-
-// Academic Subject
+// Academic Module
 export interface AcademicSubject {
   id: number;
   name: string;
@@ -1399,7 +1402,6 @@ export interface AcademicSubject {
   };
 }
 
-// Academic Grade
 export interface AcademicGrade {
   id: number;
   santriId: number;
@@ -1420,19 +1422,32 @@ export interface AcademicGrade {
   };
 }
 
-// Attendance
+export interface AttendanceResponse {
+  data?: Attendance;
+  success?: boolean;
+  message?: string;
+  [key: string]: unknown;
+}
+
+export interface SantriResponse {
+  data?: Santri;
+  success?: boolean;
+  message?: string;
+  [key: string]: unknown;
+}
+
 export enum AttendanceStatus {
   PRESENT = "PRESENT",
   ABSENT = "ABSENT",
   SICK = "SICK",
-  PERMIT = "PERMIT", // Ganti PERMIT dengan PERMITTED
+  PERMIT = "PERMIT",
 }
 
 export interface Attendance {
   id: number;
   santriId: number;
   date: string | Date;
-  status: AttendanceStatus; // Gunakan enum di sini
+  status: AttendanceStatus;
   remarks?: string;
   recordedBy?: number;
   createdAt: string | Date;
@@ -1447,7 +1462,6 @@ export interface Attendance {
   };
 }
 
-// DTO untuk Create/Update
 export interface CreateSubjectDto {
   name: string;
   description?: string;
@@ -1466,7 +1480,7 @@ export interface CreateGradeDto {
 export interface CreateAttendanceDto {
   santriId: number;
   date: string;
-  status: AttendanceStatus; // Gunakan enum di sini
+  status: AttendanceStatus;
   remarks?: string;
   recordedBy?: number;
 }
@@ -1477,15 +1491,12 @@ export interface LogActionResponse {
     id?: number;
     module?: string;
     action?: string;
-    [key: string]: unknown;
+    [key: string]: unknown; // Tambahkan index signature
   };
   error?: string;
 }
 
-// Tambahkan API functions untuk Academic Module
 export const academicApi = {
-  // academicApi object di api.ts
-
   async logAction(params: {
     module: string;
     action: string;
@@ -1497,44 +1508,41 @@ export const academicApi = {
       // Coba gunakan auditApi jika tersedia
       if (auditApi && typeof auditApi.create === "function") {
         // Buat payload yang sesuai dengan DTO backend
-        const auditPayload: any = {
+        const auditPayload: CreateAuditDto = {
           module: params.module,
           action: params.action,
+          ...(params.recordId !== undefined && { recordId: params.recordId }),
+          ...(params.userId !== undefined && { userId: params.userId }),
+          ...(params.note && { note: params.note }),
         };
-
-        // Hanya tambahkan properti jika ada nilainya
-        if (params.recordId !== undefined) {
-          auditPayload.recordId = params.recordId;
-        }
-
-        if (params.userId !== undefined) {
-          auditPayload.userId = params.userId;
-        }
-
-        if (params.note) {
-          auditPayload.note = params.note;
-        }
 
         const auditResult = await auditApi.create(auditPayload);
 
         // Handle different response formats
         if (auditResult && typeof auditResult === "object") {
-          if ("success" in auditResult && auditResult.success) {
+          const resultObj = auditResult as Record<string, unknown>;
+
+          if ("success" in resultObj && resultObj.success) {
+            const data = resultObj.data as Record<string, unknown> | undefined;
             return {
               success: true,
-              data: auditResult.data || params,
+              data: data ? { ...data, ...params } : params,
             };
-          } else if ("id" in auditResult) {
+          } else if ("id" in resultObj) {
             return {
               success: true,
-              data: auditResult,
+              data: { ...resultObj, ...params } as Record<string, unknown> & {
+                id?: number;
+                module?: string;
+                action?: string;
+              },
             };
           }
         }
 
         return {
           success: true,
-          data: auditResult || params,
+          data: params,
         };
       }
 
@@ -1558,7 +1566,6 @@ export const academicApi = {
       };
     }
   },
-
   async createGrade(payload: CreateGradeDto) {
     try {
       console.log("Creating grade with payload:", payload);
@@ -1622,6 +1629,7 @@ export const academicApi = {
       throw error;
     }
   },
+
   async listAttendance(params?: {
     skip?: number;
     take?: number;
@@ -1635,6 +1643,7 @@ export const academicApi = {
     });
     return res as Attendance[] | { data: Attendance[] };
   },
+
   async listGrades(params?: {
     skip?: number;
     take?: number;
@@ -1679,12 +1688,13 @@ export const academicApi = {
       throw error;
     }
   },
+
   async createSubject(payload: CreateSubjectDto) {
     const res = await apiFetch(`/academic/subject`, {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as AcademicSubject;
   },
 
   async listSubjects(params?: {
@@ -1711,7 +1721,7 @@ export const academicApi = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as AcademicSubject;
   },
 
   async deleteSubject(id: number) {
@@ -1740,7 +1750,7 @@ export const academicApi = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as AcademicGrade;
   },
 
   async deleteGrade(id: number) {
@@ -1756,7 +1766,7 @@ export const academicApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as Attendance;
   },
 
   async getAttendanceBySantri(santriId: number) {
@@ -1778,7 +1788,7 @@ export const academicApi = {
       method: "PUT",
       body: JSON.stringify(payload),
     });
-    return res;
+    return res as Attendance;
   },
 
   async deleteAttendance(id: number) {
@@ -1819,7 +1829,6 @@ export const academicApi = {
   },
 };
 
-// Tambahkan interface yang hilang di bagian Academic Module
 export interface CreateGradeInput {
   santriId: number;
   subjectId: number;
@@ -1847,7 +1856,6 @@ export interface UpdateAttendanceInput {
   remarks?: string;
 }
 
-// Tambahkan interface untuk Teachers
 export interface Teacher {
   id: number;
   name: string;
@@ -1855,12 +1863,411 @@ export interface Teacher {
   role: string;
 }
 
-// Tambahkan function untuk mendapatkan teachers
 export const teachersApi = {
   async list() {
     const res = await apiFetch(`/users?role=TEACHER`, {
       method: "GET",
     });
     return res as { data: Teacher[] } | Teacher[];
+  },
+};
+
+// ================================
+// COUNSELING TYPES & API
+// ================================
+
+export enum CounselingStatus {
+  PLANNED = "PLANNED",
+  ONGOING = "ONGOING",
+  COMPLETED = "COMPLETED",
+  CANCELLED = "CANCELLED",
+}
+
+export interface CounselingSession {
+  id: number;
+  santriId: number;
+  counselorId?: number;
+  topic: string;
+  notes?: string;
+  recommendation?: string;
+  status: CounselingStatus;
+  scheduledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  santri?: {
+    id: number;
+    name: string;
+    gender: string;
+  };
+  counselor?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
+export interface CreateCounselingDto {
+  santriId: number;
+  counselorId?: number;
+  topic: string;
+  notes?: string;
+  recommendation?: string;
+  status?: CounselingStatus;
+  scheduledAt?: string;
+}
+
+export interface UpdateCounselingStatusDto {
+  status: CounselingStatus;
+}
+
+export interface QueryCounselingParams {
+  skip?: number;
+  take?: number;
+  santriId?: number;
+  counselorId?: number;
+  status?: CounselingStatus;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export const counselingApi = {
+  async create(
+    data: CreateCounselingDto
+  ): Promise<ApiResponse<CounselingSession>> {
+    try {
+      console.log("Creating counseling session with data:", data);
+
+      const payload = {
+        ...data,
+        // Pastikan scheduledAt dalam format ISO
+        scheduledAt: data.scheduledAt
+          ? new Date(data.scheduledAt).toISOString()
+          : undefined,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/counseling`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
+
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch {
+          errorMessage = errorText || `HTTP ${response.status}`;
+        }
+
+        // Handle foreign key constraint error khusus
+        if (
+          response.status === 400 &&
+          errorMessage.includes("Foreign key constraint")
+        ) {
+          errorMessage =
+            "Santri tidak ditemukan. Pastikan santri yang dipilih ada di database.";
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log("Create counseling response:", result);
+
+      // Handle the correct response format
+      if (result.success && result.data) {
+        return {
+          success: true,
+          data: result.data as CounselingSession,
+        };
+      } else if (result.id) {
+        return {
+          success: true,
+          data: result as CounselingSession,
+        };
+      } else {
+        throw new Error(result.message || "Invalid response format");
+      }
+    } catch (error) {
+      console.error("Error in create counseling:", error);
+
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal membuat sesi konseling",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal membuat sesi konseling",
+      };
+    }
+  },
+
+  // Get all counseling sessions
+  async list(
+    params?: QueryCounselingParams
+  ): Promise<ApiResponse<CounselingSession[]>> {
+    try {
+      const qs = buildQueryString(params);
+      const response = await fetch(`${API_BASE_URL}/counseling${qs}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log("Raw counseling list response:", result);
+
+      // Handle different response formats
+      let data: CounselingSession[] = [];
+      if (Array.isArray(result)) {
+        data = result as CounselingSession[];
+      } else if (
+        result &&
+        typeof result === "object" &&
+        "data" in result &&
+        Array.isArray(result.data)
+      ) {
+        data = result.data as CounselingSession[];
+      } else if (
+        result &&
+        typeof result === "object" &&
+        Array.isArray(result)
+      ) {
+        data = result as CounselingSession[];
+      }
+
+      return {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      console.error("Error in counseling list:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil data sesi konseling",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil data sesi konseling",
+      };
+    }
+  },
+
+  // Get single counseling session
+  async get(id: number): Promise<ApiResponse<CounselingSession>> {
+    try {
+      console.log(`Fetching counseling session with ID: ${id}`);
+
+      const response = await fetch(`${API_BASE_URL}/counseling/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log("Raw counseling response:", result);
+
+      // Handle the correct response format
+      if (result.success && result.data) {
+        return {
+          success: true,
+          data: result.data as CounselingSession,
+        };
+      } else if (result.id) {
+        return {
+          success: true,
+          data: result as CounselingSession,
+        };
+      } else {
+        throw new Error(result.message || "Invalid response format");
+      }
+    } catch (error) {
+      console.error("Error in get counseling:", error);
+
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil data sesi konseling",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil data sesi konseling",
+      };
+    }
+  },
+
+  // Update counseling status
+  async updateStatus(
+    id: number,
+    data: UpdateCounselingStatusDto
+  ): Promise<ApiResponse<CounselingSession>> {
+    try {
+      console.log(`Updating counseling status ID: ${id} with data:`, data);
+
+      const response = await fetch(`${API_BASE_URL}/counseling/${id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log("Update counseling status response:", result);
+
+      // Handle the correct response format
+      if (result.success && result.data) {
+        return {
+          success: true,
+          data: result.data as CounselingSession,
+        };
+      } else if (result.id) {
+        return {
+          success: true,
+          data: result as CounselingSession,
+        };
+      } else {
+        throw new Error(result.message || "Invalid response format");
+      }
+    } catch (error) {
+      console.error("Error in update counseling status:", error);
+
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengupdate status konseling",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengupdate status konseling",
+      };
+    }
+  },
+
+  // Get counseling stats
+  async getStats(): Promise<
+    ApiResponse<{
+      totalSessions: number;
+      totalPlanned: number;
+      totalOngoing: number;
+      totalCompleted: number;
+      totalCancelled: number;
+    }>
+  > {
+    try {
+      // First get all sessions
+      const sessionsRes = await this.list({ take: 1000 });
+
+      if (!sessionsRes.success || !sessionsRes.data) {
+        throw new Error("Failed to fetch sessions for stats");
+      }
+
+      const sessions = sessionsRes.data;
+      const stats = {
+        totalSessions: sessions.length,
+        totalPlanned: sessions.filter(
+          (s) => s.status === CounselingStatus.PLANNED
+        ).length,
+        totalOngoing: sessions.filter(
+          (s) => s.status === CounselingStatus.ONGOING
+        ).length,
+        totalCompleted: sessions.filter(
+          (s) => s.status === CounselingStatus.COMPLETED
+        ).length,
+        totalCancelled: sessions.filter(
+          (s) => s.status === CounselingStatus.CANCELLED
+        ).length,
+      };
+
+      return {
+        success: true,
+        data: stats,
+      };
+    } catch (error) {
+      console.error("Error in get counseling stats:", error);
+
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil statistik konseling",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil statistik konseling",
+      };
+    }
+  },
+};
+
+export interface Counselor {
+  id: number;
+  name: string;
+  email: string;
+  role?: string;
+}
+
+export const counselorsApi = {
+  async list(): Promise<Counselor[]> {
+    try {
+      const res: unknown = await apiFetch(
+        `/users?role=TEACHER,STAFF,ADMIN,SUPERADMIN`,
+        {
+          method: "GET",
+        }
+      );
+
+      // Handle different response formats
+      if (Array.isArray(res)) {
+        return res as Counselor[];
+      } else if (res && typeof res === "object" && "data" in res) {
+        const response = res as { data: unknown };
+        if (Array.isArray(response.data)) {
+          return response.data as Counselor[];
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching counselors:", error);
+      return [];
+    }
   },
 };

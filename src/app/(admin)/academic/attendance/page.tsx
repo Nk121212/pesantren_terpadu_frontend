@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   type Attendance,
   AttendanceStatus,
@@ -9,7 +9,6 @@ import {
   Santri,
 } from "@/lib/api";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ClipboardCheck,
   Search,
@@ -36,72 +35,114 @@ export default function AttendancePage() {
   const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
   const [santriMap, setSantriMap] = useState<Record<number, Santri>>({});
 
-  const fetchAttendance = async () => {
+  function isSantri(obj: unknown): obj is Santri {
+    if (typeof obj !== "object" || obj === null) return false;
+
+    if (!("name" in obj) || !("gender" in obj)) return false;
+
+    return (
+      typeof (obj as { name: unknown }).name === "string" &&
+      typeof (obj as { gender: unknown }).gender === "string"
+    );
+  }
+
+  function isAttendanceArrayResponse(
+    res: unknown
+  ): res is { success: boolean; data: Attendance[] } {
+    if (typeof res !== "object" || res === null) return false;
+
+    if (!("data" in res) || !("success" in res)) return false;
+
+    const r = res as Record<string, unknown>;
+
+    return typeof r.success === "boolean" && Array.isArray(r.data);
+  }
+
+  const fetchAttendance = useCallback(async () => {
     try {
       setRefreshing(true);
 
-      // Build params object with proper types
-      const params: {
-        skip?: number;
-        take?: number;
-        search?: string;
-        date?: string;
-        status?: AttendanceStatus;
-      } = {
+      const params = {
         take: 100,
+        ...(search && { search }),
+        ...(dateFilter && { date: dateFilter }),
+        ...(statusFilter !== "all" && {
+          status: statusFilter as AttendanceStatus,
+        }),
       };
 
-      if (search) params.search = search;
-      if (dateFilter) params.date = dateFilter;
-      if (statusFilter !== "all") {
-        // Type assertion karena statusFilter adalah string
-        params.status = statusFilter as AttendanceStatus;
-      }
-
       const attendanceRes = await academicApi.listAttendance(params);
-      const attendanceResNew = attendanceRes?.data;
 
       let attendances: Attendance[] = [];
-      if (attendanceResNew && typeof attendanceResNew === "object") {
-        if (
-          "data" in attendanceResNew &&
-          Array.isArray(attendanceResNew.data)
+
+      // Handle response dengan cara yang lebih sederhana dan aman
+      if (attendanceRes) {
+        // Cek jika response adalah array langsung
+        if (Array.isArray(attendanceRes)) {
+          attendances = attendanceRes;
+        }
+        // Cek jika response memiliki property data yang merupakan array
+        else if (
+          attendanceRes !== null &&
+          typeof attendanceRes === "object" &&
+          "data" in attendanceRes &&
+          Array.isArray((attendanceRes as { data: unknown }).data)
         ) {
-          attendances = attendanceResNew.data;
-        } else if (Array.isArray(attendanceResNew)) {
-          attendances = attendanceResNew;
-        } else if (
-          "success" in attendanceResNew &&
-          attendanceResNew.success &&
-          Array.isArray(attendanceResNew.data)
-        ) {
-          attendances = attendanceResNew.data;
+          attendances = (attendanceRes as { data: Attendance[] }).data;
+        }
+        if (isAttendanceArrayResponse(attendanceRes)) {
+          attendances = attendanceRes.data;
+        }
+        // Fallback: coba ekstrak data dari object
+        else if (attendanceRes !== null && typeof attendanceRes === "object") {
+          // Cari property mana yang berisi array
+          const entries = Object.entries(attendanceRes);
+          for (const [key, value] of entries) {
+            if (Array.isArray(value) && value.length > 0) {
+              // Cek apakah array berisi objek dengan struktur Attendance
+              const firstItem = value[0];
+              if (
+                firstItem &&
+                typeof firstItem === "object" &&
+                "id" in firstItem &&
+                "santriId" in firstItem &&
+                "date" in firstItem
+              ) {
+                attendances = value as Attendance[];
+                break;
+              }
+            }
+          }
         }
       }
 
+      console.log("Fetched attendances:", attendances.length);
+
       setAttendanceData(attendances);
 
-      // Fetch santri details for mapping
       const santriIds = Array.from(new Set(attendances.map((a) => a.santriId)));
+      console.log("Santri IDs to fetch:", santriIds);
+
       if (santriIds.length > 0) {
         const newSantriMap: Record<number, Santri> = {};
 
-        // Fetch each santri individually
         for (const santriId of santriIds) {
           try {
             const santriRes = await santriApi.get(santriId);
-            if (santriRes && typeof santriRes === "object") {
-              if ("data" in santriRes) {
-                newSantriMap[santriId] = santriRes.data as Santri;
-              } else if ("id" in santriRes) {
-                newSantriMap[santriId] = santriRes as Santri;
-              }
+
+            if (!santriRes || typeof santriRes !== "object") continue;
+
+            if ("data" in santriRes && isSantri(santriRes.data)) {
+              newSantriMap[santriId] = santriRes.data;
+            } else if (isSantri(santriRes)) {
+              newSantriMap[santriId] = santriRes;
             }
           } catch (error) {
             console.error(`Failed to fetch santri ${santriId}:`, error);
           }
         }
 
+        console.log("Santri map:", newSantriMap);
         setSantriMap(newSantriMap);
       }
     } catch (error) {
@@ -110,20 +151,19 @@ export default function AttendancePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [search, dateFilter, statusFilter]);
 
   useEffect(() => {
     fetchAttendance();
-  }, []);
+  }, [fetchAttendance]);
 
   useEffect(() => {
-    // Debounce search
     const timer = setTimeout(() => {
       fetchAttendance();
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [search, dateFilter, statusFilter]);
+  }, [search, dateFilter, statusFilter, fetchAttendance]);
 
   const getStatusColor = (status: AttendanceStatus): string => {
     switch (status) {
@@ -131,7 +171,7 @@ export default function AttendancePage() {
         return "bg-green-100 text-green-800";
       case AttendanceStatus.SICK:
         return "bg-yellow-100 text-yellow-800";
-      case AttendanceStatus.PERMITTED:
+      case AttendanceStatus.PERMIT:
         return "bg-blue-100 text-blue-800";
       case AttendanceStatus.ABSENT:
         return "bg-red-100 text-red-800";
@@ -146,7 +186,7 @@ export default function AttendancePage() {
         return <CheckCircle className="w-4 h-4 text-green-600" />;
       case AttendanceStatus.SICK:
         return <Clock className="w-4 h-4 text-yellow-600" />;
-      case AttendanceStatus.PERMITTED:
+      case AttendanceStatus.PERMIT:
         return <Clock className="w-4 h-4 text-blue-600" />;
       case AttendanceStatus.ABSENT:
         return <XCircle className="w-4 h-4 text-red-600" />;
@@ -155,46 +195,16 @@ export default function AttendancePage() {
     }
   };
 
-  // Di handleDelete di Detail Page, tambahkan error handling yang lebih baik:
-
-  const handleDelete = async () => {
+  const handleDelete = async (id: number) => {
     if (!confirm("Apakah Anda yakin ingin menghapus data absensi ini?")) return;
 
     try {
-      setDeleting(true);
-      const id = Number(params.id);
       await academicApi.deleteAttendance(id);
-
-      // Log audit trail
-      try {
-        const auditResponse = await academicApi.logAction({
-          module: "ATTENDANCE",
-          action: "DELETE",
-          recordId: id,
-          note: `Menghapus absensi ID: ${id}`,
-        });
-
-        if (!auditResponse.success) {
-          console.warn("Audit logging failed:", auditResponse.error);
-        }
-      } catch (auditError) {
-        console.error("Failed to log audit:", auditError);
-      }
-
+      fetchAttendance();
       alert("Absensi berhasil dihapus");
-
-      // Kembali ke halaman utama/list absensi
-      router.push("/academic/attendance");
     } catch (error) {
       console.error("Failed to delete attendance:", error);
-
-      if (error instanceof Error) {
-        alert(`Gagal menghapus absensi: ${error.message}`);
-      } else {
-        alert("Gagal menghapus absensi. Silakan coba lagi.");
-      }
-    } finally {
-      setDeleting(false);
+      alert("Gagal menghapus absensi. Silakan coba lagi.");
     }
   };
 
@@ -227,7 +237,7 @@ export default function AttendancePage() {
     sick: attendanceData.filter((a) => a.status === AttendanceStatus.SICK)
       .length,
     permitted: attendanceData.filter(
-      (a) => a.status === AttendanceStatus.PERMITTED
+      (a) => a.status === AttendanceStatus.PERMIT
     ).length,
   };
 
@@ -242,7 +252,7 @@ export default function AttendancePage() {
   const formatDate = (dateString: string | Date): string => {
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime())) {
         return "Invalid Date";
       }
       return date.toLocaleDateString("id-ID");
@@ -361,12 +371,16 @@ export default function AttendancePage() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="search"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Cari Santri
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
+                id="search"
                 type="text"
                 placeholder="Cari nama santri..."
                 value={search}
@@ -377,12 +391,16 @@ export default function AttendancePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="dateFilter"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Tanggal
             </label>
             <div className="relative">
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
+                id="dateFilter"
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
@@ -392,12 +410,16 @@ export default function AttendancePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="statusFilter"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Status
             </label>
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <select
+                id="statusFilter"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 appearance-none"
@@ -405,7 +427,7 @@ export default function AttendancePage() {
                 <option value="all">Semua Status</option>
                 <option value={AttendanceStatus.PRESENT}>Hadir</option>
                 <option value={AttendanceStatus.SICK}>Sakit</option>
-                <option value={AttendanceStatus.PERMITTED}>Izin</option>
+                <option value={AttendanceStatus.PERMIT}>Izin</option>
                 <option value={AttendanceStatus.ABSENT}>Absen</option>
               </select>
             </div>
@@ -476,7 +498,7 @@ export default function AttendancePage() {
                             attendance.status
                           )}`}
                         >
-                          {attendance.status === AttendanceStatus.PERMITTED
+                          {attendance.status === AttendanceStatus.PERMIT
                             ? "IZIN"
                             : attendance.status}
                         </span>
