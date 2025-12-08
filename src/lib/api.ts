@@ -2271,3 +2271,401 @@ export const counselorsApi = {
     }
   },
 };
+
+// ================================
+// TAHFIDZ TYPES & API
+// ================================
+
+export interface TahfidzRecord {
+  id: number;
+  santriId: number;
+  juz: number;
+  pageStart: number;
+  pageEnd: number;
+  score?: number;
+  remarks?: string;
+  teacherId?: number;
+  createdAt: string | Date;
+  updatedAt?: string | Date;
+  santri?: {
+    id: number;
+    name: string;
+    gender: string;
+  };
+  teacher?: {
+    id: number;
+    name: string;
+    email: string;
+  };
+}
+
+export interface UpdateTahfidzDto {
+  score?: number;
+  remarks?: string;
+  teacherId?: number;
+  juz?: number;
+  pageStart?: number;
+  pageEnd?: number;
+}
+
+export interface UpdateTahfidzDto {
+  score?: number;
+  remarks?: string;
+  teacherId?: number;
+}
+
+// Update TahfidzStats interface
+export interface TahfidzOverviewStats {
+  totalRecords: number;
+  totalSantri: number;
+  averageScore: number;
+  totalPagesMemorized: number;
+  juzDistribution: Array<{ juz: number; count: number }>;
+  recentActivity: number;
+}
+
+export interface SantriTahfidzStats {
+  santri: { id: number; name: string };
+  totalRecords: number;
+  completedJuz: number;
+  averageScore: number;
+  totalPagesMemorized: number;
+  lastRecord: TahfidzRecord | null;
+  progressByJuz: Array<{ juz: number; pages: number; completion: number }>;
+  progressPercentage: number;
+}
+
+export interface CreateTahfidzDto {
+  santriId: number;
+  juz: number;
+  pageStart: number;
+  pageEnd: number;
+  score?: number;
+  remarks?: string;
+  teacherId?: number;
+}
+
+export const tahfidzApi = {
+  async create(data: CreateTahfidzDto): Promise<ApiResponse<TahfidzRecord>> {
+    try {
+      const res = await apiFetch(`/tahfidz`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      return { success: true, data: res as TahfidzRecord };
+    } catch (error) {
+      console.error("Error in create tahfidz:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal membuat catatan hafalan",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal membuat catatan hafalan",
+      };
+    }
+  },
+
+  getBySantri: async (
+    santriId: number
+  ): Promise<ApiResponse<TahfidzRecord[]>> => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/tahfidz/santri/${santriId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      return (await response.json()) as ApiResponse<TahfidzRecord[]>;
+    } catch (error) {
+      console.error("Error fetching tahfidz by santri:", error);
+      return {
+        success: false,
+        error: "Gagal mengambil data hafalan santri",
+      };
+    }
+  },
+
+  async getAll(params?: {
+    skip?: number;
+    take?: number;
+    santriId?: number;
+    juz?: number;
+    teacherId?: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<
+    ApiResponse<{
+      data: TahfidzRecord[];
+      meta: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+    }>
+  > {
+    try {
+      const qs = buildQueryString(params);
+      const response = await fetch(`${API_BASE_URL}/tahfidz${qs}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in get all tahfidz:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil data hafalan",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil data hafalan",
+      };
+    }
+  },
+
+  // Get single tahfidz record by ID
+  async getById(id: number): Promise<ApiResponse<TahfidzRecord>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tahfidz/${id}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in get tahfidz by ID:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil data hafalan",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil data hafalan",
+      };
+    }
+  },
+
+  // Update tahfidz record
+  async update(
+    id: number,
+    data: UpdateTahfidzDto
+  ): Promise<ApiResponse<TahfidzRecord>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tahfidz/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in update tahfidz:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengupdate catatan hafalan",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengupdate catatan hafalan",
+      };
+    }
+  },
+
+  // Delete tahfidz record
+  async delete(
+    id: number
+  ): Promise<ApiResponse<{ success: boolean; message: string }>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tahfidz/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in delete tahfidz:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal menghapus catatan hafalan",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal menghapus catatan hafalan",
+      };
+    }
+  },
+
+  // Get overview statistics
+  async getOverviewStats(): Promise<
+    ApiResponse<{
+      totalRecords: number;
+      totalSantri: number;
+      averageScore: number;
+      totalPagesMemorized: number;
+      juzDistribution: Array<{ juz: number; count: number }>;
+      recentActivity: number;
+    }>
+  > {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tahfidz/stats/overview`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in get overview stats:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil statistik",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil statistik",
+      };
+    }
+  },
+
+  // Get santri statistics
+  async getSantriStats(santriId: number): Promise<
+    ApiResponse<{
+      santri: { id: number; name: string };
+      totalRecords: number;
+      completedJuz: number;
+      averageScore: number;
+      totalPagesMemorized: number;
+      lastRecord: TahfidzRecord | null;
+      progressByJuz: Array<{ juz: number; pages: number; completion: number }>;
+      progressPercentage: number;
+    }>
+  > {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/tahfidz/stats/santri/${santriId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in get santri stats:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil statistik santri",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil statistik santri",
+      };
+    }
+  },
+
+  // Get recent records
+  async getRecent(limit: number = 10): Promise<ApiResponse<TahfidzRecord[]>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tahfidz/recent/${limit}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const result = await response.json();
+      return { success: true, data: result };
+    } catch (error) {
+      console.error("Error in get recent tahfidz:", error);
+      if (error instanceof Error) {
+        return {
+          success: false,
+          error: error.message || "Gagal mengambil data terbaru",
+        };
+      }
+      return {
+        success: false,
+        error: "Gagal mengambil data terbaru",
+      };
+    }
+  },
+};

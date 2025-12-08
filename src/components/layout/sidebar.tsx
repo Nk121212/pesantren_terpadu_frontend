@@ -11,7 +11,7 @@ import {
   FileText,
   CookingPot,
   History,
-  Calendar,
+  Book,
   GraduationCap,
   ChevronDown,
   ChevronRight,
@@ -126,6 +126,11 @@ export default function Sidebar() {
       href: "/counseling",
       label: "Konseling",
       icon: Users,
+    },
+    {
+      href: "/tahfidz",
+      label: "Tahfidz",
+      icon: Book,
     },
   ];
 
