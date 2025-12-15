@@ -1,14 +1,8 @@
 import { TrendingUp, TrendingDown, DollarSign, PiggyBank } from "lucide-react";
+import type { DashboardSummary } from "@/lib/api-dashboard";
 
 interface SummaryCardsProps {
-  data: {
-    finance: {
-      totalIncome: number;
-      totalExpense: number;
-      net: number;
-    };
-    savings: number;
-  };
+  data: DashboardSummary;
 }
 
 export default function SummaryCards({ data }: SummaryCardsProps) {

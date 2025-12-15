@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { tahfidzApi, santriApi } from "@/lib/api";
 import {
@@ -43,6 +43,62 @@ interface TahfidzRecord {
   };
 }
 
+interface FormData {
+  santriId: string;
+  juz: string;
+  pageStart: string;
+  pageEnd: string;
+  score: string;
+  remarks: string;
+  teacherId: string;
+}
+
+interface ValidationResult {
+  isValid: boolean;
+  message?: string;
+}
+
+interface JuzPageRange {
+  start: number;
+  end: number;
+}
+
+const JUZ_PAGE_RANGES: Record<number, JuzPageRange> = {
+  1: { start: 1, end: 22 },
+  2: { start: 23, end: 44 },
+  3: { start: 45, end: 66 },
+  4: { start: 67, end: 88 },
+  5: { start: 89, end: 110 },
+  6: { start: 111, end: 132 },
+  7: { start: 133, end: 154 },
+  8: { start: 155, end: 176 },
+  9: { start: 177, end: 198 },
+  10: { start: 199, end: 220 },
+  11: { start: 221, end: 242 },
+  12: { start: 243, end: 264 },
+  13: { start: 265, end: 286 },
+  14: { start: 287, end: 308 },
+  15: { start: 309, end: 330 },
+  16: { start: 331, end: 352 },
+  17: { start: 353, end: 374 },
+  18: { start: 375, end: 396 },
+  19: { start: 397, end: 418 },
+  20: { start: 419, end: 440 },
+  21: { start: 441, end: 462 },
+  22: { start: 463, end: 484 },
+  23: { start: 485, end: 506 },
+  24: { start: 507, end: 528 },
+  25: { start: 529, end: 550 },
+  26: { start: 551, end: 572 },
+  27: { start: 573, end: 594 },
+  28: { start: 595, end: 604 },
+  29: { start: 605, end: 604 },
+  30: { start: 605, end: 604 },
+};
+
+const MAX_PAGES_PER_RECORD = 20;
+const TOTAL_QURAN_PAGES = 604;
+
 export default function EditTahfidzPage() {
   const params = useParams();
   const router = useRouter();
@@ -53,7 +109,7 @@ export default function EditTahfidzPage() {
   const [santriList, setSantriList] = useState<Santri[]>([]);
   const [notFound, setNotFound] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     santriId: "",
     juz: "",
     pageStart: "",
@@ -63,61 +119,65 @@ export default function EditTahfidzPage() {
     teacherId: "",
   });
 
-  const id = parseInt(params.id as string);
+  const id = Number.parseInt(params.id as string);
 
-  // Fetch record data and santri list
-  useEffect(() => {
-    if (id && !isNaN(id)) {
-      fetchData();
-    } else {
+  const getJuzPageRanges = useCallback((juz: number): JuzPageRange => {
+    return JUZ_PAGE_RANGES[juz] || { start: 1, end: TOTAL_QURAN_PAGES };
+  }, []);
+
+  const parseRecordData = useCallback(
+    (recordResponse: any): TahfidzRecord | null => {
+      if (!recordResponse?.data) return null;
+
+      const { data } = recordResponse;
+
+      // Direct data structure
+      if ("id" in data && typeof data === "object") {
+        return data as TahfidzRecord;
+      }
+
+      // Nested structure
+      if (
+        typeof data === "object" &&
+        "data" in data &&
+        data.data &&
+        typeof data.data === "object" &&
+        "id" in data.data
+      ) {
+        return data.data as TahfidzRecord;
+      }
+
+      return null;
+    },
+    []
+  );
+
+  const fetchData = useCallback(async () => {
+    if (Number.isNaN(id)) {
       setError("ID tidak valid");
       setFetching(false);
+      return;
     }
-  }, [id]);
 
-  const fetchData = async () => {
     try {
       setFetching(true);
       setError(null);
       setNotFound(false);
 
-      // Fetch record data
-      const recordResponse = await tahfidzApi.getById(id);
-
-      console.log("Record response:", recordResponse);
+      const [recordResponse, santriResponse] = await Promise.all([
+        tahfidzApi.getById(id),
+        santriApi.list(),
+      ]);
 
       if (!recordResponse.success) {
         throw new Error(recordResponse.error || "Catatan tidak ditemukan");
       }
 
-      // Handle nested response structure
-      let recordData: TahfidzRecord | null = null;
-
-      if (recordResponse.data) {
-        // Check for nested structure
-        if (typeof recordResponse.data === "object") {
-          // Direct data structure
-          if ("id" in recordResponse.data) {
-            recordData = recordResponse.data as TahfidzRecord;
-          }
-          // Nested structure: { success: true, data: { data: {...} } }
-          else if (
-            "data" in recordResponse.data &&
-            typeof recordResponse.data.data === "object"
-          ) {
-            const nestedData = recordResponse.data.data as any;
-            if (nestedData && "id" in nestedData) {
-              recordData = nestedData as TahfidzRecord;
-            }
-          }
-        }
-      }
-
+      const recordData = parseRecordData(recordResponse);
       if (!recordData) {
         throw new Error("Format data tidak valid");
       }
 
-      // Set form data dengan validasi null safety
       setFormData({
         santriId: recordData.santriId?.toString() || "",
         juz: recordData.juz?.toString() || "",
@@ -128,108 +188,76 @@ export default function EditTahfidzPage() {
         teacherId: recordData.teacherId?.toString() || "",
       });
 
-      // Fetch santri list
-      const santriResponse = await santriApi.list();
+      // Handle santri list response
       if (Array.isArray(santriResponse)) {
         setSantriList(santriResponse);
-      } else if (santriResponse.data && Array.isArray(santriResponse.data)) {
+      } else if (Array.isArray(santriResponse.data)) {
         setSantriList(santriResponse.data);
-      } else if (santriResponse && Array.isArray(santriResponse)) {
-        setSantriList(santriResponse);
       }
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      if (error instanceof Error && error.message.includes("tidak ditemukan")) {
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Gagal memuat data";
+
+      if (errorMessage.includes("tidak ditemukan")) {
         setNotFound(true);
       }
-      setError(error instanceof Error ? error.message : "Gagal memuat data");
+
+      setError(errorMessage);
     } finally {
       setFetching(false);
     }
-  };
+  }, [id, parseRecordData]);
 
-  // Helper function untuk mapping juz ke halaman
-  const getJuzPageRanges = (juz: number): { start: number; end: number } => {
-    const juzToPages: Record<number, { start: number; end: number }> = {
-      1: { start: 1, end: 22 },
-      2: { start: 23, end: 44 },
-      3: { start: 45, end: 66 },
-      4: { start: 67, end: 88 },
-      5: { start: 89, end: 110 },
-      6: { start: 111, end: 132 },
-      7: { start: 133, end: 154 },
-      8: { start: 155, end: 176 },
-      9: { start: 177, end: 198 },
-      10: { start: 199, end: 220 },
-      11: { start: 221, end: 242 },
-      12: { start: 243, end: 264 },
-      13: { start: 265, end: 286 },
-      14: { start: 287, end: 308 },
-      15: { start: 309, end: 330 },
-      16: { start: 331, end: 352 },
-      17: { start: 353, end: 374 },
-      18: { start: 375, end: 396 },
-      19: { start: 397, end: 418 },
-      20: { start: 419, end: 440 },
-      21: { start: 441, end: 462 },
-      22: { start: 463, end: 484 },
-      23: { start: 485, end: 506 },
-      24: { start: 507, end: 528 },
-      25: { start: 529, end: 550 },
-      26: { start: 551, end: 572 },
-      27: { start: 573, end: 594 },
-      28: { start: 595, end: 604 },
-      29: { start: 605, end: 604 },
-      30: { start: 605, end: 604 },
-    };
-    return juzToPages[juz] || { start: 1, end: 604 };
-  };
+  useEffect(() => {
+    if (id && !Number.isNaN(id)) {
+      fetchData();
+    }
+  }, [id, fetchData]);
 
-  // Validasi halaman
-  const validatePages = (): { isValid: boolean; message?: string } => {
-    if (!formData.pageStart || !formData.pageEnd || !formData.juz) {
-      return { isValid: true }; // Biarkan form validate yang lain
+  const validatePages = useCallback((): ValidationResult => {
+    const { pageStart, pageEnd, juz } = formData;
+
+    if (!pageStart || !pageEnd || !juz) {
+      return { isValid: true };
     }
 
-    const pageStart = Number(formData.pageStart);
-    const pageEnd = Number(formData.pageEnd);
-    const juz = Number(formData.juz);
-    const totalPages = pageEnd - pageStart + 1;
+    const start = Number(pageStart);
+    const end = Number(pageEnd);
+    const juzNum = Number(juz);
+    const totalPages = end - start + 1;
 
-    // Validasi basic
-    if (pageStart > pageEnd) {
+    if (start > end) {
       return {
         isValid: false,
         message: "Halaman mulai harus lebih kecil dari halaman akhir",
       };
     }
 
-    if (pageStart < 1 || pageEnd > 604) {
+    if (start < 1 || end > TOTAL_QURAN_PAGES) {
       return {
         isValid: false,
-        message: "Halaman harus dalam range 1-604",
+        message: `Halaman harus dalam range 1-${TOTAL_QURAN_PAGES}`,
       };
     }
 
-    // Validasi berdasarkan juz
-    const juzRange = getJuzPageRanges(juz);
-    if (pageStart < juzRange.start || pageEnd > juzRange.end) {
+    const juzRange = getJuzPageRanges(juzNum);
+    if (start < juzRange.start || end > juzRange.end) {
       return {
         isValid: false,
         message: `Halaman harus dalam range Juz ${juz}: ${juzRange.start}-${juzRange.end}`,
       };
     }
 
-    // Validasi 20 halaman maksimal (sama seperti create)
-    if (totalPages > 20) {
+    if (totalPages > MAX_PAGES_PER_RECORD) {
       return {
         isValid: false,
-        message: `Maksimal 20 halaman per pencatatan. Total: ${totalPages} halaman`,
+        message: `Maksimal ${MAX_PAGES_PER_RECORD} halaman per pencatatan. Total: ${totalPages} halaman`,
       };
     }
 
     return { isValid: true };
-  };
+  }, [formData, getJuzPageRanges]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,24 +265,27 @@ export default function EditTahfidzPage() {
     setError(null);
 
     try {
-      // Validate form
-      if (
-        !formData.santriId ||
-        !formData.juz ||
-        !formData.pageStart ||
-        !formData.pageEnd
-      ) {
+      const requiredFields = [
+        "santriId",
+        "juz",
+        "pageStart",
+        "pageEnd",
+      ] as const;
+      const hasAllRequired = requiredFields.every((field) =>
+        formData[field].trim()
+      );
+
+      if (!hasAllRequired) {
         throw new Error("Harap isi semua field yang wajib diisi");
       }
 
-      const start = parseInt(formData.pageStart);
-      const end = parseInt(formData.pageEnd);
+      const start = Number.parseInt(formData.pageStart);
+      const end = Number.parseInt(formData.pageEnd);
       const totalPages = end - start + 1;
 
-      // Validasi 20 halaman maksimal
-      if (totalPages > 20) {
+      if (totalPages > MAX_PAGES_PER_RECORD) {
         throw new Error(
-          `Maksimal 20 halaman per pencatatan. Total: ${totalPages} halaman`
+          `Maksimal ${MAX_PAGES_PER_RECORD} halaman per pencatatan. Total: ${totalPages} halaman`
         );
       }
 
@@ -262,19 +293,24 @@ export default function EditTahfidzPage() {
         throw new Error("Halaman akhir harus lebih besar dari halaman awal");
       }
 
-      if (start < 1 || start > 604 || end < 1 || end > 604) {
-        throw new Error("Halaman harus antara 1-604");
+      if (
+        start < 1 ||
+        start > TOTAL_QURAN_PAGES ||
+        end < 1 ||
+        end > TOTAL_QURAN_PAGES
+      ) {
+        throw new Error(`Halaman harus antara 1-${TOTAL_QURAN_PAGES}`);
       }
 
       const payload = {
-        santriId: parseInt(formData.santriId),
-        juz: parseInt(formData.juz),
+        santriId: Number.parseInt(formData.santriId),
+        juz: Number.parseInt(formData.juz),
         pageStart: start,
         pageEnd: end,
-        score: formData.score ? parseInt(formData.score) : undefined,
+        score: formData.score ? Number.parseInt(formData.score) : undefined,
         remarks: formData.remarks || undefined,
         teacherId: formData.teacherId
-          ? parseInt(formData.teacherId)
+          ? Number.parseInt(formData.teacherId)
           : undefined,
       };
 
@@ -282,20 +318,55 @@ export default function EditTahfidzPage() {
 
       if (result.success) {
         setSuccess(true);
-        // Redirect after 2 seconds
         setTimeout(() => {
           router.push(`/tahfidz/${id}`);
         }, 2000);
       } else {
         throw new Error(result.error || "Gagal mengupdate catatan hafalan");
       }
-    } catch (error) {
-      console.error("Error updating tahfidz record:", error);
-      setError(error instanceof Error ? error.message : "Terjadi kesalahan");
+    } catch (err) {
+      console.error("Error updating tahfidz record:", err);
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleNumericChange = useCallback((name: string, value: string) => {
+    if (value && !/^\d*$/.test(value)) return;
+
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: value };
+
+      // Auto-adjust pageEnd when pageStart changes
+      if (name === "pageStart" && prev.pageEnd) {
+        const newStart = value ? Number(value) : 1;
+        const currentEnd = Number(prev.pageEnd);
+
+        if (newStart > currentEnd) {
+          newData.pageEnd = value;
+        }
+      }
+
+      // Validate page range doesn't exceed 20 pages
+      if (
+        (name === "pageStart" || name === "pageEnd") &&
+        prev.pageStart &&
+        prev.pageEnd
+      ) {
+        const start =
+          name === "pageStart" ? Number(value) : Number(prev.pageStart);
+        const end = name === "pageEnd" ? Number(value) : Number(prev.pageEnd);
+        const totalPages = end - start + 1;
+
+        if (totalPages > MAX_PAGES_PER_RECORD && name === "pageEnd") {
+          newData.pageEnd = (start + MAX_PAGES_PER_RECORD - 1).toString();
+        }
+      }
+
+      return newData;
+    });
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -304,75 +375,30 @@ export default function EditTahfidzPage() {
   ) => {
     const { name, value } = e.target;
 
-    // Validate numeric fields
     if (["juz", "pageStart", "pageEnd", "score"].includes(name)) {
-      if (value && !/^\d*$/.test(value)) {
-        return; // Only allow numbers
-      }
-
-      // Auto adjust pageEnd jika pageStart berubah
-      if (name === "pageStart" && formData.pageEnd) {
-        const newStart = value ? Number(value) : 1;
-        const currentEnd = Number(formData.pageEnd);
-        if (newStart > currentEnd) {
-          setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-            pageEnd: value,
-          }));
-          return;
-        }
-      }
-
-      // Auto adjust jika melebihi 20 halaman
-      if (
-        (name === "pageStart" || name === "pageEnd") &&
-        formData.pageStart &&
-        formData.pageEnd
-      ) {
-        const start =
-          name === "pageStart" ? Number(value) : Number(formData.pageStart);
-        const end =
-          name === "pageEnd" ? Number(value) : Number(formData.pageEnd);
-        const totalPages = end - start + 1;
-
-        if (totalPages > 20) {
-          // Auto adjust ke maksimal 20 halaman
-          if (name === "pageEnd") {
-            setFormData((prev) => ({
-              ...prev,
-              pageEnd: (start + 19).toString(),
-            }));
-            return;
-          }
-        }
-      }
+      handleNumericChange(name, value);
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
   };
 
-  // Generate juz options (1-30)
   const juzOptions = Array.from({ length: 30 }, (_, i) => i + 1);
 
-  // Calculate total pages for display
+  const pageStartNum = formData.pageStart ? Number(formData.pageStart) : 0;
+  const pageEndNum = formData.pageEnd ? Number(formData.pageEnd) : 0;
   const totalPages =
-    formData.pageStart && formData.pageEnd
-      ? Number(formData.pageEnd) - Number(formData.pageStart) + 1
-      : 0;
+    pageStartNum && pageEndNum ? pageEndNum - pageStartNum + 1 : 0;
 
   const validation = validatePages();
-  const isFormValid =
+  const isFormValid = Boolean(
     formData.santriId &&
-    formData.juz &&
-    formData.pageStart &&
-    formData.pageEnd &&
-    validation.isValid &&
-    totalPages > 0 &&
-    totalPages <= 20;
+      formData.juz &&
+      formData.pageStart &&
+      formData.pageEnd &&
+      validation.isValid &&
+      totalPages > 0 &&
+      totalPages <= MAX_PAGES_PER_RECORD
+  );
 
   if (fetching) {
     return (
@@ -388,6 +414,7 @@ export default function EditTahfidzPage() {
         <Link
           href="/tahfidz"
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          aria-label="Kembali ke Dashboard"
         >
           <ArrowLeft className="w-4 h-4" />
           Kembali ke Dashboard
@@ -405,6 +432,7 @@ export default function EditTahfidzPage() {
             <Link
               href="/tahfidz"
               className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+              aria-label="Kembali ke Dashboard"
             >
               <ArrowLeft className="w-4 h-4" />
               Kembali ke Dashboard
@@ -415,6 +443,8 @@ export default function EditTahfidzPage() {
     );
   }
 
+  const juzRange = formData.juz ? getJuzPageRanges(Number(formData.juz)) : null;
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Header */}
@@ -422,6 +452,7 @@ export default function EditTahfidzPage() {
         <Link
           href={`/tahfidz/${id}`}
           className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          aria-label="Kembali ke Detail"
         >
           <ArrowLeft className="w-4 h-4" />
           Kembali ke Detail
@@ -476,11 +507,15 @@ export default function EditTahfidzPage() {
           <div className="space-y-6">
             {/* Santri Selection */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="santriId"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"
+              >
                 <User className="w-4 h-4" />
                 Santri *
               </label>
               <select
+                id="santriId"
                 name="santriId"
                 value={formData.santriId}
                 onChange={handleChange}
@@ -500,11 +535,15 @@ export default function EditTahfidzPage() {
 
             {/* Juz Selection */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="juz"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"
+              >
                 <BookOpen className="w-4 h-4" />
                 Juz *
               </label>
               <select
+                id="juz"
                 name="juz"
                 value={formData.juz}
                 onChange={handleChange}
@@ -519,11 +558,10 @@ export default function EditTahfidzPage() {
                   </option>
                 ))}
               </select>
-              {formData.juz && (
+              {juzRange && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Range halaman Juz {formData.juz}:{" "}
-                  {getJuzPageRanges(Number(formData.juz)).start}-
-                  {getJuzPageRanges(Number(formData.juz)).end}
+                  Range halaman Juz {formData.juz}: {juzRange.start}-
+                  {juzRange.end}
                 </p>
               )}
             </div>
@@ -531,26 +569,35 @@ export default function EditTahfidzPage() {
             {/* Page Range */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-gray-700">
                   Halaman *
-                </label>
+                </span>
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-sm font-medium ${
-                      totalPages > 20 ? "text-red-600" : "text-green-600"
+                      totalPages > MAX_PAGES_PER_RECORD
+                        ? "text-red-600"
+                        : "text-green-600"
                     }`}
                   >
                     Total: {totalPages} halaman
                   </span>
-                  {totalPages > 20 && (
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                  {totalPages > MAX_PAGES_PER_RECORD && (
+                    <AlertTriangle
+                      className="w-4 h-4 text-red-500"
+                      aria-label="Peringatan"
+                    />
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                  <label htmlFor="pageStart" className="sr-only">
+                    Halaman Awal
+                  </label>
                   <input
+                    id="pageStart"
                     type="number"
                     name="pageStart"
                     value={formData.pageStart}
@@ -560,6 +607,7 @@ export default function EditTahfidzPage() {
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
+                    aria-label="Halaman Awal"
                   />
                   <p className="text-xs text-gray-500 mt-1 text-center">
                     Halaman Awal
@@ -567,7 +615,11 @@ export default function EditTahfidzPage() {
                 </div>
 
                 <div>
+                  <label htmlFor="pageEnd" className="sr-only">
+                    Halaman Akhir
+                  </label>
                   <input
+                    id="pageEnd"
                     type="number"
                     name="pageEnd"
                     value={formData.pageEnd}
@@ -577,6 +629,7 @@ export default function EditTahfidzPage() {
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={loading}
+                    aria-label="Halaman Akhir"
                   />
                   <p className="text-xs text-gray-500 mt-1 text-center">
                     Halaman Akhir
@@ -594,28 +647,37 @@ export default function EditTahfidzPage() {
                 </div>
               )}
 
-              {totalPages > 0 && totalPages <= 20 && validation.isValid && (
-                <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded">
-                  <p className="text-sm text-green-600">
-                    ✓ Range halaman valid ({totalPages} halaman)
-                  </p>
-                  {totalPages > 15 && (
-                    <p className="text-xs text-yellow-600 mt-1">
-                      <AlertTriangle className="w-3 h-3 inline mr-1" />
-                      Mendekati batas maksimal 20 halaman
+              {totalPages > 0 &&
+                totalPages <= MAX_PAGES_PER_RECORD &&
+                validation.isValid && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-100 rounded">
+                    <p className="text-sm text-green-600">
+                      ✓ Range halaman valid ({totalPages} halaman)
                     </p>
-                  )}
-                </div>
-              )}
+                    {totalPages > 15 && (
+                      <p className="text-xs text-yellow-600 mt-1">
+                        <AlertTriangle
+                          className="w-3 h-3 inline mr-1"
+                          aria-label="Peringatan"
+                        />
+                        Mendekati batas maksimal {MAX_PAGES_PER_RECORD} halaman
+                      </p>
+                    )}
+                  </div>
+                )}
             </div>
 
             {/* Score */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="score"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"
+              >
                 <Award className="w-4 h-4" />
                 Nilai (Opsional)
               </label>
               <input
+                id="score"
                 type="number"
                 name="score"
                 value={formData.score}
@@ -633,11 +695,15 @@ export default function EditTahfidzPage() {
 
             {/* Remarks */}
             <div>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <label
+                htmlFor="remarks"
+                className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2"
+              >
                 <FileText className="w-4 h-4" />
                 Catatan (Opsional)
               </label>
               <textarea
+                id="remarks"
                 name="remarks"
                 value={formData.remarks}
                 onChange={handleChange}
@@ -655,10 +721,13 @@ export default function EditTahfidzPage() {
         </div>
 
         {/* Info Panel untuk hafalan panjang */}
-        {totalPages > 20 && (
+        {totalPages > MAX_PAGES_PER_RECORD && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+              <AlertTriangle
+                className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0"
+                aria-label="Peringatan"
+              />
               <div>
                 <h4 className="font-medium text-yellow-800">
                   Hafalan Panjang Terdeteksi
@@ -666,11 +735,12 @@ export default function EditTahfidzPage() {
                 <p className="text-sm text-yellow-700 mt-1">
                   Anda akan mencatat{" "}
                   <span className="font-bold">{totalPages} halaman</span>,
-                  melebihi batas maksimal 20 halaman per pencatatan.
+                  melebihi batas maksimal {MAX_PAGES_PER_RECORD} halaman per
+                  pencatatan.
                 </p>
                 <p className="text-sm text-yellow-700 mt-2">
-                  Silahkan ubah range halaman menjadi maksimal 20 halaman untuk
-                  melanjutkan.
+                  Silahkan ubah range halaman menjadi maksimal{" "}
+                  {MAX_PAGES_PER_RECORD} halaman untuk melanjutkan.
                 </p>
               </div>
             </div>
@@ -683,6 +753,7 @@ export default function EditTahfidzPage() {
             href={`/tahfidz/${id}`}
             className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={(e) => loading && e.preventDefault()}
+            aria-label="Batal"
           >
             Batal
           </Link>
@@ -690,6 +761,7 @@ export default function EditTahfidzPage() {
             type="submit"
             disabled={!isFormValid || loading}
             className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Update Catatan"
           >
             {loading ? (
               <>

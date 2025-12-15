@@ -3,27 +3,7 @@
 import { useEffect, useState } from "react";
 import SummaryCards from "@/components/dashboard/SummaryCards";
 import { dashboardApi } from "@/lib/api";
-
-interface DashboardSummary {
-  finance: {
-    totalIncome: number;
-    totalExpense: number;
-    net: number;
-  };
-  savings: number;
-  payroll: number;
-  ppdb: {
-    totalApplicants: number;
-    totalAccepted: number;
-    totalRejected: number;
-  };
-}
-
-interface ApiResponse {
-  success: boolean;
-  data: DashboardSummary;
-  message: string;
-}
+import type { DashboardSummary, ApiResponse } from "@/lib/api";
 
 export default function SummarySection() {
   const [data, setData] = useState<DashboardSummary | null>(null);
@@ -33,14 +13,18 @@ export default function SummarySection() {
   useEffect(() => {
     dashboardApi
       .getSummary()
-      .then((response: ApiResponse) => {
-        if (response.success) {
+      .then((response: ApiResponse<DashboardSummary>) => {
+        console.log(response);
+
+        if (response.success && response.data) {
           setData(response.data);
         } else {
-          setError(response.message || "Failed to fetch data");
+          setError(response.error || "Failed to fetch data");
         }
+
         setLoading(false);
       })
+
       .catch((err: unknown) => {
         const message =
           err instanceof Error ? err.message : "Terjadi kesalahan";
@@ -72,7 +56,16 @@ export default function SummarySection() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <div className="text-yellow-600 font-semibold mb-2">No Data</div>
+        <div className="text-yellow-500">No dashboard data available</div>
+      </div>
+    );
+  }
+
+  console.log("dahsadsd", data);
 
   return (
     <div className="space-y-8">
@@ -90,19 +83,19 @@ export default function SummarySection() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Total Applicants</span>
               <span className="text-xl font-bold text-blue-600">
-                {data.ppdb.totalApplicants}
+                {data.ppdb?.totalApplicants || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Accepted</span>
               <span className="text-xl font-bold text-green-600">
-                {data.ppdb.totalAccepted}
+                {data.ppdb?.totalAccepted || 0}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Rejected</span>
               <span className="text-xl font-bold text-red-600">
-                {data.ppdb.totalRejected}
+                {data.ppdb?.totalRejected || 0}
               </span>
             </div>
           </div>
@@ -115,7 +108,7 @@ export default function SummarySection() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Total Payroll</span>
               <span className="text-xl font-bold text-purple-600">
-                Rp {data.payroll.toLocaleString("id-ID")}
+                Rp {data.payroll?.toLocaleString("id-ID") || 0}
               </span>
             </div>
           </div>

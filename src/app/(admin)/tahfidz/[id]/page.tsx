@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { tahfidzApi, Santri, TahfidzRecord } from "@/lib/api";
+import { tahfidzApi, type Santri, type TahfidzRecord } from "@/lib/api";
 import {
   BookOpen,
   ArrowLeft,
@@ -26,21 +26,15 @@ export default function TahfidzDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [record, setRecord] = useState<TahfidzRecord>(null);
+  const [record, setRecord] = useState<TahfidzRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [santriRecords, setSantriRecords] = useState<Santri[]>([]);
+  const [santriRecords, setSantriRecords] = useState<TahfidzRecord[]>([]);
 
-  const id = parseInt(params.id as string);
+  const id = Number.parseInt(params.id as string);
 
-  useEffect(() => {
-    if (id) {
-      fetchRecord();
-    }
-  }, [id]);
-
-  const fetchRecord = async () => {
+  const fetchRecord = useCallback(async () => {
     try {
       setLoading(true);
       const response = await tahfidzApi.getById(id);
@@ -49,7 +43,7 @@ export default function TahfidzDetailPage() {
 
       if (response?.success && response.data) {
         // Data langsung ada di response.data (tidak ada nesting tambahan)
-        const recordData = response.data.data;
+        const recordData = response.data;
         console.log("Record data:", recordData);
         setRecord(recordData);
 
@@ -59,7 +53,7 @@ export default function TahfidzDetailPage() {
         console.log("All records response:", allRecordsResponse);
 
         if (allRecordsResponse?.success && allRecordsResponse.data) {
-          let allRecords = [];
+          let allRecords: TahfidzRecord[] = [];
 
           // Handle response structure from getAll
           if (
@@ -90,7 +84,13 @@ export default function TahfidzDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchRecord();
+    }
+  }, [id, fetchRecord]);
 
   const handleDelete = async () => {
     try {
@@ -232,7 +232,7 @@ export default function TahfidzDetailPage() {
         </Link>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="p-3 bg-green-100 rounded-lg">
               <BookOpen className="w-6 h-6 text-green-600" />
             </div>
@@ -246,20 +246,29 @@ export default function TahfidzDetailPage() {
             </div>
           </div>
 
-          {/* <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
               <Printer className="w-4 h-4" />
-              Cetak
+              <span>Cetak</span>
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+            <button
+              type="button"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
               <Download className="w-4 h-4" />
-              Export
+              <span>Export</span>
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">
+            <button
+              type="button"
+              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
               <Share2 className="w-4 h-4" />
-              Share
+              <span>Share</span>
             </button>
-          </div> */}
+          </div>
         </div>
       </div>
 
@@ -331,7 +340,9 @@ export default function TahfidzDetailPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Halaman</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    Halaman
+                  </label>
                   <div className="mt-2 p-4 bg-gray-50 rounded-lg">
                     <p className="text-3xl font-bold text-gray-900">
                       {record.pageStart || 0} - {record.pageEnd || 0}
@@ -344,7 +355,9 @@ export default function TahfidzDetailPage() {
 
                 {record.score !== undefined && record.score !== null && (
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Nilai</p>
+                    <label className="text-sm font-medium text-gray-600">
+                      Nilai
+                    </label>
                     <div className="mt-2 p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between">
                         <p
@@ -382,7 +395,9 @@ export default function TahfidzDetailPage() {
 
               {record.remarks && (
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Catatan</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    Catatan
+                  </label>
                   <div className="mt-2 p-4 bg-blue-50 border border-blue-100 rounded-lg">
                     <p className="text-gray-700 whitespace-pre-line">
                       {record.remarks}
@@ -402,16 +417,18 @@ export default function TahfidzDetailPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <p className="text-sm font-medium text-gray-600">Nama Santri</p>
+                <label className="text-sm font-medium text-gray-600">
+                  Nama Santri
+                </label>
                 <p className="text-lg font-medium text-gray-900 mt-1">
                   {record.santri?.name || "Tidak diketahui"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <label className="text-sm font-medium text-gray-600">
                   Jenis Kelamin
-                </p>
+                </label>
                 <p className="text-lg font-medium text-gray-900 mt-1">
                   {record.santri?.gender === "Pria" ? "Laki-laki" : "Perempuan"}
                 </p>
@@ -419,9 +436,9 @@ export default function TahfidzDetailPage() {
 
               {record.santri?.birthDate && (
                 <div>
-                  <p className="text-sm font-medium text-gray-600">
+                  <label className="text-sm font-medium text-gray-600">
                     Tanggal Lahir
-                  </p>
+                  </label>
                   <p className="text-lg font-medium text-gray-900 mt-1">
                     {new Date(record.santri.birthDate).toLocaleDateString(
                       "id-ID"
@@ -432,7 +449,9 @@ export default function TahfidzDetailPage() {
 
               {record.santri?.address && (
                 <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-gray-600">Alamat</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    Alamat
+                  </label>
                   <p className="text-lg font-medium text-gray-900 mt-1">
                     {record.santri.address}
                   </p>
@@ -475,7 +494,7 @@ export default function TahfidzDetailPage() {
                     href={`/tahfidz/${santriRecord.id}`}
                     className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 shrink-0">
                       <div
                         className={`px-3 py-1 rounded-full text-sm font-medium ${getJuzColor(
                           santriRecord.juz
@@ -538,7 +557,9 @@ export default function TahfidzDetailPage() {
 
             <div className="space-y-4">
               <div>
-                <p className="text-sm font-medium text-gray-600">Dibuat pada</p>
+                <label className="text-sm font-medium text-gray-600">
+                  Dibuat pada
+                </label>
                 <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                   <p className="text-gray-900">
                     {record.createdAt ? formatDate(record.createdAt) : "-"}
@@ -548,9 +569,9 @@ export default function TahfidzDetailPage() {
 
               {record.updatedAt && record.updatedAt !== record.createdAt && (
                 <div>
-                  <p className="text-sm font-medium text-gray-600">
+                  <label className="text-sm font-medium text-gray-600">
                     Diupdate pada
-                  </p>
+                  </label>
                   <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                     <p className="text-gray-900">
                       {formatDate(record.updatedAt)}
@@ -561,7 +582,9 @@ export default function TahfidzDetailPage() {
 
               {record.teacher && (
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Pengajar</p>
+                  <label className="text-sm font-medium text-gray-600">
+                    Pengajar
+                  </label>
                   <div className="mt-2 p-3 bg-blue-50 rounded-lg">
                     <p className="font-medium text-gray-900">
                       {record.teacher.name || "Tidak diketahui"}
@@ -578,7 +601,7 @@ export default function TahfidzDetailPage() {
           </div>
 
           {/* Quick Actions */}
-          {/* <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">Aksi Cepat</h3>
 
             <div className="space-y-3">
@@ -586,7 +609,7 @@ export default function TahfidzDetailPage() {
                 href={`/tahfidz/${id}/edit`}
                 className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-200 transition"
               >
-                <Edit className="w-5 h-5 text-blue-600" />
+                <Edit className="w-5 h-5 text-blue-600 shrink-0" />
                 <div>
                   <p className="font-medium text-gray-900">Edit Catatan</p>
                   <p className="text-xs text-gray-500">
@@ -599,7 +622,7 @@ export default function TahfidzDetailPage() {
                 href={`/tahfidz/create?santriId=${record.santriId}`}
                 className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-200 transition"
               >
-                <BookOpen className="w-5 h-5 text-green-600" />
+                <BookOpen className="w-5 h-5 text-green-600 shrink-0" />
                 <div>
                   <p className="font-medium text-gray-900">Tambah Hafalan</p>
                   <p className="text-xs text-gray-500">
@@ -612,7 +635,7 @@ export default function TahfidzDetailPage() {
                 href={`/tahfidz?santri=${record.santriId}`}
                 className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-purple-50 hover:border-purple-200 transition"
               >
-                <FileText className="w-5 h-5 text-purple-600" />
+                <FileText className="w-5 h-5 text-purple-600 shrink-0" />
                 <div>
                   <p className="font-medium text-gray-900">Riwayat Hafalan</p>
                   <p className="text-xs text-gray-500">
@@ -625,14 +648,14 @@ export default function TahfidzDetailPage() {
                 href="/tahfidz"
                 className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-orange-50 hover:border-orange-200 transition"
               >
-                <TrendingUp className="w-5 h-5 text-orange-600" />
+                <TrendingUp className="w-5 h-5 text-orange-600 shrink-0" />
                 <div>
                   <p className="font-medium text-gray-900">Dashboard</p>
                   <p className="text-xs text-gray-500">Lihat semua hafalan</p>
                 </div>
               </Link>
             </div>
-          </div> */}
+          </div>
 
           {/* Stats */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

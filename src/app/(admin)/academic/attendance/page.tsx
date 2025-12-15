@@ -62,87 +62,90 @@ export default function AttendancePage() {
     try {
       setRefreshing(true);
 
-      const params = {
+      // Ganti tipe any dengan interface yang spesifik
+      interface AttendanceParams {
+        take: number;
+        search?: string;
+        date?: string;
+        status?: string;
+      }
+
+      const params: AttendanceParams = {
         take: 100,
-        ...(search && { search }),
-        ...(dateFilter && { date: dateFilter }),
-        ...(statusFilter !== "all" && {
-          status: statusFilter as AttendanceStatus,
-        }),
       };
 
+      if (search) {
+        params.search = search;
+      }
+
+      if (dateFilter) {
+        params.date = dateFilter;
+      }
+
+      if (statusFilter !== "all") {
+        params.status = statusFilter;
+      }
+
+      console.log("Fetching attendance with params:", params);
+
       const attendanceRes = await academicApi.listAttendance(params);
+      console.log("Attendance API response:", attendanceRes);
 
       let attendances: Attendance[] = [];
 
-      // Handle response dengan cara yang lebih sederhana dan aman
-      if (attendanceRes) {
-        // Cek jika response adalah array langsung
-        if (Array.isArray(attendanceRes)) {
-          attendances = attendanceRes;
-        }
-        // Cek jika response memiliki property data yang merupakan array
-        else if (
-          attendanceRes !== null &&
-          typeof attendanceRes === "object" &&
-          "data" in attendanceRes &&
-          Array.isArray((attendanceRes as { data: unknown }).data)
-        ) {
-          attendances = (attendanceRes as { data: Attendance[] }).data;
-        }
-        if (isAttendanceArrayResponse(attendanceRes)) {
-          attendances = attendanceRes.data;
-        }
-        // Fallback: coba ekstrak data dari object
-        else if (attendanceRes !== null && typeof attendanceRes === "object") {
-          // Cari property mana yang berisi array
-          const entries = Object.entries(attendanceRes);
-          for (const [key, value] of entries) {
-            if (Array.isArray(value) && value.length > 0) {
-              // Cek apakah array berisi objek dengan struktur Attendance
-              const firstItem = value[0];
-              if (
-                firstItem &&
-                typeof firstItem === "object" &&
-                "id" in firstItem &&
-                "santriId" in firstItem &&
-                "date" in firstItem
-              ) {
-                attendances = value as Attendance[];
-                break;
-              }
-            }
-          }
-        }
+      // Handle the nested response structure
+      if (attendanceRes.success) {
+        // Data sudah di-extract dengan benar oleh apiFetch
+        attendances = attendanceRes.data || [];
+      } else {
+        console.error("Failed to fetch attendance:", attendanceRes.error);
       }
 
-      console.log("Fetched attendances:", attendances.length);
-
+      console.log("Processed attendances:", attendances);
       setAttendanceData(attendances);
 
-      const santriIds = Array.from(new Set(attendances.map((a) => a.santriId)));
-      console.log("Santri IDs to fetch:", santriIds);
+      // Fetch santri data
+      if (attendances.length > 0) {
+        const santriIds = Array.from(
+          new Set(attendances.map((a) => a.santriId))
+        );
+        console.log("Santri IDs to fetch:", santriIds);
 
-      if (santriIds.length > 0) {
         const newSantriMap: Record<number, Santri> = {};
 
-        for (const santriId of santriIds) {
-          try {
-            const santriRes = await santriApi.get(santriId);
-
-            if (!santriRes || typeof santriRes !== "object") continue;
-
-            if ("data" in santriRes && isSantri(santriRes.data)) {
-              newSantriMap[santriId] = santriRes.data;
-            } else if (isSantri(santriRes)) {
-              newSantriMap[santriId] = santriRes;
-            }
-          } catch (error) {
-            console.error(`Failed to fetch santri ${santriId}:`, error);
+        // Santri data sudah termasuk dalam response attendance
+        // Gunakan data yang sudah ada jika tersedia
+        attendances.forEach((attendance) => {
+          if (attendance.santri) {
+            newSantriMap[attendance.santriId] = {
+              id: attendance.santri.id,
+              name: attendance.santri.name,
+              // Tambahkan properti lain yang dibutuhkan
+              gender: "MALE", // Default value atau fetch jika perlu
+            } as Santri;
           }
+        });
+
+        // Fetch detail santri untuk yang tidak ada di response
+        const missingSantriIds = santriIds.filter((id) => !newSantriMap[id]);
+
+        if (missingSantriIds.length > 0) {
+          console.log("Fetching missing santri:", missingSantriIds);
+          const santriPromises = missingSantriIds.map(async (santriId) => {
+            try {
+              const santriRes = await santriApi.get(santriId);
+              if (santriRes.success && santriRes.data) {
+                newSantriMap[santriId] = santriRes.data;
+              }
+            } catch (error) {
+              console.error(`Failed to fetch santri ${santriId}:`, error);
+            }
+          });
+
+          await Promise.all(santriPromises);
         }
 
-        console.log("Santri map:", newSantriMap);
+        console.log("Santri map:", Object.keys(newSantriMap).length);
         setSantriMap(newSantriMap);
       }
     } catch (error) {
@@ -152,7 +155,6 @@ export default function AttendancePage() {
       setRefreshing(false);
     }
   }, [search, dateFilter, statusFilter]);
-
   useEffect(() => {
     fetchAttendance();
   }, [fetchAttendance]);

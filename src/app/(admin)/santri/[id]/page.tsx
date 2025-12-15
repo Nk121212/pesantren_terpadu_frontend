@@ -11,21 +11,33 @@ import {
   Calendar,
   VenusAndMars,
   MapPin,
+  Users,
 } from "lucide-react";
 
 export default function DetailSantriPage() {
   const { id } = useParams();
   const [santri, setSantri] = useState<Santri | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) return;
+
     santriApi
       .get(Number(id))
-      .then((res) => {
-        setSantri(res.data);
+      .then((response) => {
+        if (response.success && response.data) {
+          console.log("santri edit", response);
+          setSantri(response.data);
+        } else {
+          setError(response.error || "Gagal memuat data santri");
+        }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "Terjadi kesalahan");
+        setLoading(false);
+      });
   }, [id]);
 
   if (loading) {
@@ -36,15 +48,22 @@ export default function DetailSantriPage() {
     );
   }
 
-  if (!santri) {
+  if (error || !santri) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md">
           <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Santri tidak ditemukan
+            {error || "Santri tidak ditemukan"}
           </h2>
-          <Link href="/santri" className="text-blue-600 hover:text-blue-700">
+          <p className="text-gray-600 mb-4">
+            Data santri tidak dapat dimuat atau tidak tersedia
+          </p>
+          <Link
+            href="/santri"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
             Kembali ke daftar santri
           </Link>
         </div>
@@ -120,7 +139,7 @@ export default function DetailSantriPage() {
                 </div>
               </div>
 
-              {/* Tambahkan field address */}
+              {/* Alamat */}
               <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
                 <MapPin className="w-5 h-5 text-gray-600 mt-0.5" />
                 <div>
@@ -133,37 +152,99 @@ export default function DetailSantriPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Tambahkan field guardian */}
-              {santri.guardianId && (
+              {/* Wali Santri */}
+              {santri.guardianId ? (
                 <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <p className="text-sm font-medium text-purple-800 mb-1">
-                    Wali Santri
+                  <div className="flex items-center gap-3 mb-2">
+                    <Users className="w-5 h-5 text-purple-600" />
+                    <p className="text-sm font-medium text-purple-800">
+                      Wali Santri
+                    </p>
+                  </div>
+                  <p className="text-purple-900">
+                    ID Wali: {santri.guardianId}
                   </p>
-                  <p className="text-purple-900">ID: {santri.guardianId}</p>
-                  {/* Anda bisa menambahkan nama wali jika tersedia */}
+                  {/* 
+                    Jika Anda memiliki data wali, Anda bisa menampilkan:
+                    <p className="text-sm text-purple-700 mt-1">{guardianName}</p>
+                    <p className="text-sm text-purple-600">{guardianPhone}</p>
+                  */}
+                </div>
+              ) : (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <Users className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Wali Santri
+                      </p>
+                      <p className="text-gray-500 text-sm mt-1">
+                        Belum ada wali yang ditetapkan
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm font-medium text-blue-800 mb-1">Status</p>
-                <p className="text-blue-900">Aktif</p>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <p className="text-blue-900">Aktif</p>
+                </div>
               </div>
 
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                 <p className="text-sm font-medium text-green-800 mb-1">
-                  Terdaftar Sejak
+                  Tanggal Registrasi
                 </p>
                 <p className="text-green-900">
-                  {new Date().toLocaleDateString("id-ID", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
+                  {santri.birthDate
+                    ? new Date(santri.birthDate).toLocaleDateString("id-ID", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "-"}
                 </p>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-4 pt-4">
+        <Link
+          href="/santri"
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+        >
+          Kembali
+        </Link>
+        <button
+          onClick={async () => {
+            if (
+              confirm(
+                `Apakah Anda yakin ingin menghapus santri ${santri.name}?`
+              )
+            ) {
+              try {
+                const response = await santriApi.remove(santri.id);
+                if (response.success) {
+                  alert("Santri berhasil dihapus");
+                  window.location.href = "/santri";
+                } else {
+                  alert(response.error || "Gagal menghapus santri");
+                }
+              } catch (error) {
+                alert("Terjadi kesalahan saat menghapus santri");
+              }
+            }
+          }}
+          className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+        >
+          Hapus Santri
+        </button>
       </div>
     </div>
   );

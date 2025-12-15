@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { invoicesApi, type Invoice, type Paginated } from "@/lib/api";
+import {
+  invoicesApi,
+  type Invoice,
+  type Paginated,
+  PaymentMethod,
+} from "@/lib/api";
 import Link from "next/link";
 import {
   Plus,

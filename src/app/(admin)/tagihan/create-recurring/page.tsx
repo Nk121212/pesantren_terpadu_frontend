@@ -8,6 +8,7 @@ import {
   type Santri,
   type CreateRecurringInvoiceDto,
   PaymentMethod,
+  type Paginated,
 } from "@/lib/api";
 import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
@@ -17,6 +18,7 @@ export default function CreateRecurringInvoicePage() {
 
   const [santri, setSantri] = useState<Santri[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<CreateRecurringInvoiceDto>({
@@ -30,11 +32,18 @@ export default function CreateRecurringInvoicePage() {
   useEffect(() => {
     santriApi
       .list()
-      .then((res) => {
-        const santriData = "data" in res ? res.data : [];
-        setSantri(santriData);
+      .then((response) => {
+        if (response?.data) {
+          const paginatedResponse = response.data;
+          setSantri(paginatedResponse || []);
+        } else {
+          setError("Gagal memuat data santri");
+        }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error fetching santri:", err);
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -47,20 +56,28 @@ export default function CreateRecurringInvoicePage() {
     }
 
     setSubmitting(true);
+    setError(null);
+
     try {
       const res = await paymentsApi.createRecurringInvoice(formData);
       if (res.success) {
         alert("Tagihan berulang berhasil dibuat!");
         router.push("/tagihan");
+      } else {
+        setError(res.error || "Gagal membuat tagihan berulang");
       }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      console.error("Error creating recurring invoice:", err);
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleChange = (field: keyof CreateRecurringInvoiceDto, value: any) => {
+  const handleChange = (
+    field: keyof CreateRecurringInvoiceDto,
+    value: string | number | PaymentMethod
+  ) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -99,6 +116,23 @@ export default function CreateRecurringInvoicePage() {
     );
   }
 
+  if (error && santri.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Error</h1>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Link
+            href="/tagihan"
+            className="text-blue-600 hover:underline inline-block"
+          >
+            Kembali ke daftar tagihan
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       {/* Header */}
@@ -119,6 +153,14 @@ export default function CreateRecurringInvoicePage() {
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 font-medium">Error</p>
+          <p className="text-red-600 text-sm mt-1">{error}</p>
+        </div>
+      )}
+
       {/* Template Buttons */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -128,6 +170,7 @@ export default function CreateRecurringInvoicePage() {
           {templateInvoices.map((template, index) => (
             <button
               key={index}
+              type="button"
               onClick={() => {
                 setFormData((prev) => ({
                   ...prev,
@@ -145,6 +188,7 @@ export default function CreateRecurringInvoicePage() {
                 {new Intl.NumberFormat("id-ID", {
                   style: "currency",
                   currency: "IDR",
+                  minimumFractionDigits: 0,
                 }).format(template.amount)}
               </p>
             </button>
@@ -163,7 +207,9 @@ export default function CreateRecurringInvoicePage() {
           </label>
           <select
             value={formData.santriId}
-            onChange={(e) => handleChange("santriId", parseInt(e.target.value))}
+            onChange={(e) =>
+              handleChange("santriId", Number.parseInt(e.target.value) || 0)
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           >
@@ -198,7 +244,7 @@ export default function CreateRecurringInvoicePage() {
             type="number"
             value={formData.amount}
             onChange={(e) =>
-              handleChange("amount", parseInt(e.target.value) || 0)
+              handleChange("amount", Number.parseInt(e.target.value) || 0)
             }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             min="1"
@@ -224,13 +270,15 @@ export default function CreateRecurringInvoicePage() {
           </label>
           <select
             value={formData.method}
-            onChange={(e) => handleChange("method", e.target.value)}
+            onChange={(e) =>
+              handleChange("method", e.target.value as PaymentMethod)
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="BANK_TRANSFER">Bank Transfer</option>
-            <option value="VA">Virtual Account</option>
-            <option value="QRIS">QRIS</option>
-            <option value="EWALLET">E-Wallet</option>
+            <option value={PaymentMethod.BANK_TRANSFER}>Bank Transfer</option>
+            <option value={PaymentMethod.VA}>Virtual Account</option>
+            <option value={PaymentMethod.QRIS}>QRIS</option>
+            <option value={PaymentMethod.EWALLET}>E-Wallet</option>
           </select>
         </div>
 

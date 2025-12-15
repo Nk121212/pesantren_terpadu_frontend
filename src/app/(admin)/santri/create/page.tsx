@@ -138,8 +138,8 @@ export default function CreateSantriPage() {
               onChange={handleChange}
             >
               <option value="">Pilih Jenis Kelamin</option>
-              <option value="Pria">Pria</option>
-              <option value="Wanita">Wanita</option>
+              <option value="L">Laki - Laki</option>
+              <option value="P">Perempuan</option>
             </select>
           </div>
 

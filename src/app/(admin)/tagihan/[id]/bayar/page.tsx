@@ -8,6 +8,7 @@ import {
   type Invoice,
   PaymentMethod,
   type CreatePaymentDto,
+  PaymentStatus,
 } from "@/lib/api";
 import {
   ArrowLeft,
@@ -21,10 +22,11 @@ import Link from "next/link";
 export default function BayarTagihanPage() {
   const params = useParams();
   const router = useRouter();
-  const invoiceId = parseInt(params.id as string);
+  const invoiceId = Number.parseInt(params.id as string);
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>(
     PaymentMethod.BANK_TRANSFER
@@ -33,30 +35,41 @@ export default function BayarTagihanPage() {
   const [proofUrl, setProofUrl] = useState("");
 
   useEffect(() => {
-    if (invoiceId) {
-      invoicesApi
-        .get(invoiceId)
-        .then((res) => {
-          if (res.success) {
-            setInvoice(res.data);
-            setAmount(res.data.amount);
-          }
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+    if (!invoiceId) {
+      setError("ID tagihan tidak valid");
+      setLoading(false);
+      return;
     }
+
+    invoicesApi
+      .get(invoiceId)
+      .then((res) => {
+        if (res.success && res.data) {
+          setInvoice(res.data);
+          setAmount(res.data.amount);
+        } else {
+          setError(res.error || "Gagal memuat data tagihan");
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching invoice:", err);
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+      })
+      .finally(() => setLoading(false));
   }, [invoiceId]);
 
   const handleManualPayment = async () => {
     if (!invoice) return;
 
     setSubmitting(true);
+    setError(null);
+
     try {
       const payload: CreatePaymentDto = {
         invoiceId: invoice.id,
         amount: amount,
         method: selectedMethod,
-        status: "PENDING",
+        status: PaymentStatus.PENDING,
         proofUrl: proofUrl || undefined,
       };
 
@@ -64,9 +77,12 @@ export default function BayarTagihanPage() {
       if (res.success) {
         alert("Pembayaran berhasil dibuat!");
         router.push(`/tagihan/${invoice.id}`);
+      } else {
+        setError(res.error || "Gagal membuat pembayaran");
       }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      console.error("Payment error:", err);
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setSubmitting(false);
     }
@@ -76,18 +92,23 @@ export default function BayarTagihanPage() {
     if (!invoice) return;
 
     setSubmitting(true);
+    setError(null);
+
     try {
       const res = await paymentsApi.createDuitkuPayment(
         invoice.id,
         selectedMethod,
         amount
       );
-      if (res.success) {
+      if (res.success && res.data) {
         // Redirect ke payment URL Duitku
-        window.location.href = res.data.paymentUrl;
+        globalThis.location.href = res.data.paymentUrl;
+      } else {
+        setError(res.error || "Gagal membuat pembayaran Duitku");
       }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      console.error("Duitku payment error:", err);
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setSubmitting(false);
     }
@@ -163,12 +184,12 @@ export default function BayarTagihanPage() {
     );
   }
 
-  if (!invoice) {
+  if (error || !invoice) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900">
-            Tagihan tidak ditemukan
+            {error || "Tagihan tidak ditemukan"}
           </h1>
           <Link
             href="/tagihan"
@@ -203,6 +224,14 @@ export default function BayarTagihanPage() {
           <p className="text-gray-600">Lakukan pembayaran untuk tagihan</p>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 font-medium">Error</p>
+          <p className="text-red-600 text-sm mt-1">{error}</p>
+        </div>
+      )}
 
       {/* Invoice Info */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
@@ -252,11 +281,13 @@ export default function BayarTagihanPage() {
           {paymentMethods.map((method) => (
             <button
               key={method.value}
+              type="button"
               onClick={() => setSelectedMethod(method.value)}
               className={getColorClasses(
                 method.color,
                 selectedMethod === method.value
               )}
+              aria-label={`Pilih metode pembayaran ${method.label}`}
             >
               <div className="flex items-center gap-3">
                 <div className={getIconColorClasses(method.color)}>
@@ -279,18 +310,23 @@ export default function BayarTagihanPage() {
         </h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="amount"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               Jumlah Bayar
             </label>
             <input
+              id="amount"
               type="number"
               value={amount}
-              onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
+              onChange={(e) => setAmount(Number.parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               min="1"
               max={remaining}
+              aria-describedby="amount-help"
             />
-            <p className="text-sm text-gray-500 mt-1">
+            <p id="amount-help" className="text-sm text-gray-500 mt-1">
               Maksimal:{" "}
               {new Intl.NumberFormat("id-ID", {
                 style: "currency",
@@ -301,10 +337,14 @@ export default function BayarTagihanPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label
+              htmlFor="proofUrl"
+              className="block text-sm font-medium text-gray-700 mb-2"
+            >
               URL Bukti Pembayaran (Opsional)
             </label>
             <input
+              id="proofUrl"
               type="url"
               value={proofUrl}
               onChange={(e) => setProofUrl(e.target.value)}

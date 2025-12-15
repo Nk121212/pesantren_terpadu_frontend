@@ -29,27 +29,40 @@ export default function TagihanDetailPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (invoiceId) {
-      // Load invoice detail
-      invoicesApi
-        .get(invoiceId)
-        .then((res) => {
-          if (res.success) {
-            setInvoice(res.data);
-            // Load payments for this invoice
-            return paymentsApi.getByInvoice(invoiceId);
-          }
-        })
-        .then((paymentsRes) => {
-          if (paymentsRes?.success) {
-            setPayments(paymentsRes.data);
-          }
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+    if (!invoiceId) {
+      setLoading(false);
+      setError("ID tagihan tidak valid");
+      return;
     }
+
+    const fetchData = async () => {
+      try {
+        // Load invoice detail
+        const invoiceResponse = await invoicesApi.get(invoiceId);
+
+        if (invoiceResponse.success && invoiceResponse.data) {
+          setInvoice(invoiceResponse.data);
+
+          // Load payments for this invoice
+          const paymentsResponse = await paymentsApi.getByInvoice(invoiceId);
+          if (paymentsResponse.success && paymentsResponse.data) {
+            setPayments(paymentsResponse.data);
+          }
+        } else {
+          setError(invoiceResponse.error || "Gagal memuat data tagihan");
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [invoiceId]);
 
   const getStatusBadge = (status: string) => {
@@ -147,14 +160,17 @@ export default function TagihanDetailPage() {
       const res = await paymentsApi.delete(paymentId);
       if (res.success) {
         alert("Pembayaran berhasil dihapus!");
-        // Refresh data
+        // Refresh payments data
         const paymentsRes = await paymentsApi.getByInvoice(invoiceId);
-        if (paymentsRes.success) {
+        if (paymentsRes.success && paymentsRes.data) {
           setPayments(paymentsRes.data);
         }
+      } else {
+        alert(res.error || "Gagal menghapus pembayaran");
       }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      console.error("Error deleting payment:", err);
+      alert("Terjadi kesalahan saat menghapus pembayaran");
     }
   };
 
@@ -166,12 +182,12 @@ export default function TagihanDetailPage() {
     );
   }
 
-  if (!invoice) {
+  if (error || !invoice) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900">
-            Tagihan tidak ditemukan
+            {error || "Tagihan tidak ditemukan"}
           </h1>
           <Link
             href="/tagihan"
@@ -189,7 +205,7 @@ export default function TagihanDetailPage() {
     .reduce((sum, payment) => sum + payment.amount, 0);
 
   const remaining = invoice.amount - totalPaid;
-  const progressPercentage = (totalPaid / invoice.amount) * 100;
+  const progressPercentage = Math.min(100, (totalPaid / invoice.amount) * 100);
 
   return (
     <div className="space-y-6">

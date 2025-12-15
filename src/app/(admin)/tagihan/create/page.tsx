@@ -2,18 +2,26 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { santriApi, invoicesApi, type Santri } from "@/lib/api";
+import { santriApi, invoicesApi, type Santri, type Paginated } from "@/lib/api";
 import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
+
+interface FormData {
+  santriId: number;
+  amount: number;
+  description: string;
+  dueDate: string;
+}
 
 export default function CreateTagihanPage() {
   const router = useRouter();
 
   const [santri, setSantri] = useState<Santri[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     santriId: 0,
     amount: 0,
     description: "",
@@ -23,11 +31,18 @@ export default function CreateTagihanPage() {
   useEffect(() => {
     santriApi
       .list()
-      .then((res) => {
-        const santriData = "data" in res ? res.data : [];
-        setSantri(santriData);
+      .then((response) => {
+        if (response.success && response.data) {
+          const paginatedResponse = response.data as Paginated<Santri>;
+          setSantri(paginatedResponse.items || []);
+        } else {
+          setError(response.error || "Gagal memuat data santri");
+        }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error("Error fetching santri:", err);
+        setError(err instanceof Error ? err.message : "Terjadi kesalahan");
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,6 +55,8 @@ export default function CreateTagihanPage() {
     }
 
     setSubmitting(true);
+    setError(null);
+
     try {
       const res = await invoicesApi.create({
         santriId: formData.santriId,
@@ -51,15 +68,18 @@ export default function CreateTagihanPage() {
       if (res.success) {
         alert("Tagihan berhasil dibuat!");
         router.push("/tagihan");
+      } else {
+        setError(res.error || "Gagal membuat tagihan");
       }
-    } catch (error: any) {
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      console.error("Error creating invoice:", err);
+      setError(err instanceof Error ? err.message : "Terjadi kesalahan");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof FormData, value: string | number) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -70,6 +90,23 @@ export default function CreateTagihanPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error && santri.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Error</h1>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Link
+            href="/tagihan"
+            className="text-blue-600 hover:underline inline-block"
+          >
+            Kembali ke daftar tagihan
+          </Link>
+        </div>
       </div>
     );
   }
@@ -92,6 +129,14 @@ export default function CreateTagihanPage() {
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800 font-medium">Error</p>
+          <p className="text-red-600 text-sm mt-1">{error}</p>
+        </div>
+      )}
+
       {/* Form */}
       <form
         onSubmit={handleSubmit}
@@ -103,7 +148,9 @@ export default function CreateTagihanPage() {
           </label>
           <select
             value={formData.santriId}
-            onChange={(e) => handleChange("santriId", parseInt(e.target.value))}
+            onChange={(e) =>
+              handleChange("santriId", Number.parseInt(e.target.value) || 0)
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           >
@@ -138,7 +185,7 @@ export default function CreateTagihanPage() {
             type="number"
             value={formData.amount}
             onChange={(e) =>
-              handleChange("amount", parseInt(e.target.value) || 0)
+              handleChange("amount", Number.parseInt(e.target.value) || 0)
             }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             min="1"
