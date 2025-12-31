@@ -271,7 +271,6 @@ export default function GradesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -311,7 +310,6 @@ export default function GradesPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between">
@@ -374,10 +372,8 @@ export default function GradesPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-          {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cari
@@ -394,7 +390,6 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Santri Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Santri
@@ -416,7 +411,6 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Subject Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Mata Pelajaran
@@ -438,7 +432,6 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Semester Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Semester
@@ -458,9 +451,7 @@ export default function GradesPage() {
           </div>
         </div>
 
-        {/* Row 2 Filters */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Year Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Tahun Ajaran
@@ -482,7 +473,6 @@ export default function GradesPage() {
             </div>
           </div>
 
-          {/* Items Per Page */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Data per Halaman
@@ -506,7 +496,6 @@ export default function GradesPage() {
             </select>
           </div>
 
-          {/* Apply Filters Button */}
           <div className="flex items-end">
             <button
               onClick={applyFilters}
@@ -518,7 +507,6 @@ export default function GradesPage() {
         </div>
       </div>
 
-      {/* Grades Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
@@ -649,7 +637,6 @@ export default function GradesPage() {
           </table>
         </div>
 
-        {/* Pagination */}
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
           <div>
             <span className="text-sm text-gray-600">
@@ -677,7 +664,6 @@ export default function GradesPage() {
           </div>
         </div>
 
-        {/* Empty State */}
         {filteredGrades.length === 0 && (
           <div className="text-center py-12">
             <Award className="w-12 h-12 text-gray-300 mx-auto mb-4" />

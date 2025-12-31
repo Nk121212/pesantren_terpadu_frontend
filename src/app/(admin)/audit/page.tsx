@@ -35,6 +35,8 @@ export default function AuditTrailPage() {
     setLoading(true);
     try {
       const response = await auditApi.list();
+      console.log("AUDIT API RESPONSE:", response);
+
       let logs: AuditTrail[] = [];
 
       if (Array.isArray(response)) {
@@ -47,6 +49,7 @@ export default function AuditTrailPage() {
         logs = Array.isArray(response.data) ? response.data : [];
       }
 
+      console.log("FINAL LOGS:", logs);
       setAuditLogs(logs);
     } catch (error) {
       console.error("Failed to fetch audit logs:", error);
@@ -108,7 +111,7 @@ export default function AuditTrailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link
@@ -137,10 +140,8 @@ export default function AuditTrailPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Cari Aktivitas
@@ -157,7 +158,6 @@ export default function AuditTrailPage() {
             </div>
           </div>
 
-          {/* Module Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Filter Modul
@@ -181,7 +181,6 @@ export default function AuditTrailPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="bg-purple-50 p-4 rounded-lg">
             <p className="text-sm text-purple-600 font-medium">
               Total Aktivitas
@@ -194,7 +193,6 @@ export default function AuditTrailPage() {
         </div>
       </div>
 
-      {/* Audit Logs Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {filteredLogs.length === 0 ? (
           <div className="text-center py-12">
@@ -332,7 +330,6 @@ export default function AuditTrailPage() {
           </div>
         )}
 
-        {/* Expanded Details */}
         {expandedLogs.map((logId) => {
           const log = auditLogs.find((l) => l.id === logId);
           if (!log) return null;
@@ -425,7 +422,6 @@ export default function AuditTrailPage() {
         })}
       </div>
 
-      {/* Pagination (jika ada) */}
       {filteredLogs.length > 0 && (
         <div className="flex items-center justify-between bg-white px-6 py-3 rounded-xl border border-gray-200">
           <p className="text-sm text-gray-700">

@@ -1,3 +1,4 @@
+// src/app/(admin)/santri/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -11,13 +12,30 @@ export default function SantriListPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    santriApi
-      .list({ page: 1, per_page: 20 })
-      .then((res) => {
-        setData(res);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const result = await santriApi.list({ page: 1, per_page: 20 });
+        console.log("Fetched santri data:", result);
+        setData(result);
+      } catch (error) {
+        console.error("Failed to fetch santri:", error);
+        // Set empty data on error
+        setData({
+          data: [],
+          meta: {
+            total: 0,
+            per_page: 0,
+            current_page: 1,
+            last_page: 1,
+          },
+        });
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+
+    fetchData();
   }, []);
 
   const filteredSantri = data?.data?.filter((santri) =>
@@ -34,7 +52,7 @@ export default function SantriListPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ... sisa kode tetap sama ... */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -67,14 +85,13 @@ export default function SantriListPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Santri</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {data?.data?.length || 0}
+                {data?.meta?.total || 0}
               </p>
             </div>
             <div className="p-3 bg-blue-50 rounded-full">
@@ -88,7 +105,7 @@ export default function SantriListPage() {
             <div>
               <p className="text-sm font-medium text-gray-600">Santri Pria</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {data?.data?.filter((s) => s.gender === "Pria").length || 0}
+                {data?.data?.filter((s) => s.gender === "L").length || 0}
               </p>
             </div>
             <div className="p-3 bg-green-50 rounded-full">
@@ -102,7 +119,7 @@ export default function SantriListPage() {
             <div>
               <p className="text-sm font-medium text-gray-600">Santri Wanita</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">
-                {data?.data?.filter((s) => s.gender === "Wanita").length || 0}
+                {data?.data?.filter((s) => s.gender === "P").length || 0}
               </p>
             </div>
             <div className="p-3 bg-pink-50 rounded-full">
@@ -176,8 +193,15 @@ export default function SantriListPage() {
                       <button
                         onClick={async () => {
                           if (confirm(`Hapus santri ${santri.name}?`)) {
-                            await santriApi.remove(santri.id);
-                            window.location.reload();
+                            const result = await santriApi.remove(santri.id);
+                            if (result.success) {
+                              // Refresh data
+                              const newData = await santriApi.list({
+                                page: 1,
+                                per_page: 20,
+                              });
+                              setData(newData);
+                            }
                           }
                         }}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"

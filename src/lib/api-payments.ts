@@ -77,6 +77,93 @@ export enum InvoiceStatus {
   CANCELLED = "CANCELLED",
 }
 
+// Type guard functions
+function isPayment(data: unknown): data is Payment {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  const validPaymentMethods = Object.values(PaymentMethod);
+  const validPaymentStatuses = Object.values(PaymentStatus);
+
+  return (
+    typeof obj.id === "number" &&
+    typeof obj.invoiceId === "number" &&
+    typeof obj.amount === "number" &&
+    typeof obj.createdAt === "string" &&
+    typeof obj.updatedAt === "string" &&
+    validPaymentMethods.includes(obj.method as PaymentMethod) &&
+    validPaymentStatuses.includes(obj.status as PaymentStatus) &&
+    (obj.proofUrl === undefined || typeof obj.proofUrl === "string") &&
+    (obj.paidAt === undefined || typeof obj.paidAt === "string")
+  );
+}
+
+function isPaymentArray(data: unknown): data is Payment[] {
+  return Array.isArray(data) && data.every(isPayment);
+}
+
+function isInvoice(data: unknown): data is Invoice {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  const validInvoiceStatuses = Object.values(InvoiceStatus);
+
+  return (
+    typeof obj.id === "number" &&
+    typeof obj.santriId === "number" &&
+    typeof obj.amount === "number" &&
+    typeof obj.description === "string" &&
+    typeof obj.dueDate === "string" &&
+    typeof obj.createdAt === "string" &&
+    typeof obj.updatedAt === "string" &&
+    validInvoiceStatuses.includes(obj.status as InvoiceStatus) &&
+    (obj.santriName === undefined || typeof obj.santriName === "string")
+  );
+}
+
+function isDuitkuPaymentResponse(data: unknown): data is DuitkuPaymentResponse {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  return (
+    typeof obj.paymentUrl === "string" && typeof obj.reference === "string"
+  );
+}
+
+function isMessageResponse(data: unknown): data is { message: string } {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+  return typeof obj.message === "string";
+}
+
+function isPaginatedInvoice(data: unknown): data is Paginated<Invoice> {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  // Versi 1: Cek struktur dengan meta (pagination standard)
+  if ("data" in obj && "meta" in obj && obj.meta && typeof obj.meta === "object") {
+    const meta = obj.meta as Record<string, unknown>;
+    const hasPaginationFields =
+      "total" in meta &&
+      "page" in meta &&
+      "per_page" in meta &&
+      "total_pages" in meta;
+
+    if (Array.isArray(obj.data)) {
+      return hasPaginationFields && obj.data.every(isInvoice);
+    }
+  }
+
+  // Versi 2: Cek struktur API Anda (dengan success dan message)
+  if ("success" in obj && "data" in obj && "message" in obj) {
+    if (obj.success === true && Array.isArray(obj.data)) {
+      return obj.data.every(isInvoice);
+    }
+  }
+
+  return false;
+}
+
 export const paymentsApi = {
   async create(data: CreatePaymentDto): Promise<ApiResponse<Payment>> {
     try {
@@ -84,7 +171,16 @@ export const paymentsApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isPayment(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid payment data structure:", res.data);
+        return {
+          success: false,
+          error: "Data pembayaran tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating payment:", error);
       return {
@@ -98,7 +194,16 @@ export const paymentsApi = {
   async get(id: number): Promise<ApiResponse<Payment>> {
     try {
       const res = await apiFetch(`/payments/${id}`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isPayment(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid payment data structure:", res.data);
+        return {
+          success: false,
+          error: "Data pembayaran tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching payment:", error);
       return {
@@ -116,7 +221,16 @@ export const paymentsApi = {
       const res = await apiFetch(`/payments/invoice/${invoiceId}`, {
         method: "GET",
       });
-      return { success: true, data: res.data };
+
+      if (isPaymentArray(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid payments array structure:", res.data);
+        return {
+          success: false,
+          error: "Data pembayaran array tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching payments by invoice:", error);
       return {
@@ -138,7 +252,16 @@ export const paymentsApi = {
         method: "PATCH",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isPayment(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid payment data structure:", res.data);
+        return {
+          success: false,
+          error: "Data pembayaran tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error updating payment:", error);
       return {
@@ -154,7 +277,16 @@ export const paymentsApi = {
   async delete(id: number): Promise<ApiResponse<{ message: string }>> {
     try {
       const res = await apiFetch(`/payments/${id}`, { method: "DELETE" });
-      return { success: true, data: res.data };
+
+      if (isMessageResponse(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid message response structure:", res.data);
+        return {
+          success: false,
+          error: "Response tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error deleting payment:", error);
       return {
@@ -175,7 +307,16 @@ export const paymentsApi = {
         method: "POST",
         body: JSON.stringify({ amount }),
       });
-      return { success: true, data: res.data };
+
+      if (isDuitkuPaymentResponse(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid Duitku payment response structure:", res.data);
+        return {
+          success: false,
+          error: "Response Duitku payment tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating Duitku payment:", error);
       return {
@@ -196,7 +337,16 @@ export const paymentsApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isInvoice(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid invoice data structure:", res.data);
+        return {
+          success: false,
+          error: "Data invoice tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating recurring invoice:", error);
       return {
@@ -217,7 +367,16 @@ export const paymentsApi = {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      return { success: true, data: res.data };
+
+      if (isMessageResponse(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid webhook response structure:", res.data);
+        return {
+          success: false,
+          error: "Response webhook tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error simulating webhook:", error);
       return {
@@ -238,7 +397,13 @@ export const invoicesApi = {
     try {
       const qs = buildQueryString(params);
       const res = await apiFetch(`/invoices${qs}`, { method: "GET" });
-      return res;
+
+      if (isPaginatedInvoice(res)) {
+        return res;
+      } else {
+        console.error("Invalid paginated invoices structure:", res);
+        throw new Error("Data invoices paginated tidak valid");
+      }
     } catch (error) {
       console.error("Error fetching invoices:", error);
       throw error;
@@ -248,7 +413,16 @@ export const invoicesApi = {
   async get(id: number): Promise<ApiResponse<Invoice>> {
     try {
       const res = await apiFetch(`/invoices/${id}`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isInvoice(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid invoice data structure:", res.data);
+        return {
+          success: false,
+          error: "Data invoice tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching invoice:", error);
       return {
@@ -272,7 +446,16 @@ export const invoicesApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isInvoice(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid invoice data structure:", res.data);
+        return {
+          success: false,
+          error: "Data invoice tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating invoice:", error);
       return {

@@ -47,7 +47,7 @@ export default function CreateMerchantPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-center gap-4">
         <Link
           href="/kantin"
@@ -66,7 +66,6 @@ export default function CreateMerchantPage() {
         </div>
       </div>
 
-      {/* Form */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">

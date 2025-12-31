@@ -25,16 +25,18 @@ export default function LoginPage() {
       const res = await loginUser({ email, password });
 
       if (res?.data?.access_token) {
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       } else {
         setError(
           res?.message || "Login gagal. Periksa email dan password Anda."
         );
       }
-    } catch (err: any) {
-      setError(err?.message || "Terjadi kesalahan saat login");
-    } finally {
-      setLoading(false);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Terjadi kesalahan saat login");
+      }
     }
   }
 
@@ -43,7 +45,7 @@ export default function LoginPage() {
       {/* Left Section - Form */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          {/* Header */}
+          {}
           <div className="text-center mb-10">
             <div className="flex justify-center mb-5">
               <div className="w-14 h-14 bg-linear-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-md">

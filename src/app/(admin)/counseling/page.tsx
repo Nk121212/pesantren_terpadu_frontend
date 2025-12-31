@@ -79,7 +79,9 @@ export default function CounselingDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | CounselingStatus>(
+    "all"
+  );
 
   const fetchAllData = useCallback(async () => {
     try {
@@ -220,7 +222,7 @@ export default function CounselingDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -253,7 +255,6 @@ export default function CounselingDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Link href="/counseling">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
@@ -343,7 +344,6 @@ export default function CounselingDashboardPage() {
         </Link>
       </div>
 
-      {/* Search and Filter */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -364,7 +364,9 @@ export default function CounselingDashboardPage() {
               <select
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as "all" | CounselingStatus)
+                }
               >
                 <option value="all">Semua Status</option>
                 <option value={CounselingStatus.PLANNED}>Direncanakan</option>
@@ -377,7 +379,6 @@ export default function CounselingDashboardPage() {
         </div>
       </div>
 
-      {/* Recent Activities */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -438,7 +439,6 @@ export default function CounselingDashboardPage() {
         </div>
       </div>
 
-      {/* Recent Sessions */}
       {filteredSessions.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="px-6 py-4 border-b border-gray-200">

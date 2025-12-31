@@ -228,7 +228,7 @@ export default function TransaksiTabunganPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-center gap-4">
         <Link
           href="/tabungan"
@@ -279,7 +279,6 @@ export default function TransaksiTabunganPage() {
         </div>
       )} */}
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between">

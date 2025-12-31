@@ -199,7 +199,7 @@ export default function CounselingDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -279,9 +279,8 @@ export default function CounselingDetailPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Information */}
         <div className="lg:col-span-2 space-y-6">
           {/* Santri and Counselor Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -392,7 +391,6 @@ export default function CounselingDetailPage() {
           )}
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
           {/* Status Management */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

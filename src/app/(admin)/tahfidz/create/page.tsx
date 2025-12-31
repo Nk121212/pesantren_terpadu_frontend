@@ -352,7 +352,7 @@ export default function CreateTahfidzPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Header */}
+      {}
       <div className="mb-8">
         <Link
           href="/tahfidz"
@@ -407,11 +407,9 @@ export default function CreateTahfidzPage() {
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="space-y-6">
-            {/* Santri Selection */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                 <User className="w-4 h-4" />
@@ -573,7 +571,6 @@ export default function CreateTahfidzPage() {
               </p>
             </div>
 
-            {/* Remarks */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                 <FileText className="w-4 h-4" />

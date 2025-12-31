@@ -447,7 +447,7 @@ export default function EditTahfidzPage() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Header */}
+      {}
       <div className="mb-8">
         <Link
           href={`/tahfidz/${id}`}
@@ -501,11 +501,9 @@ export default function EditTahfidzPage() {
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="space-y-6">
-            {/* Santri Selection */}
             <div>
               <label
                 htmlFor="santriId"
@@ -693,7 +691,6 @@ export default function EditTahfidzPage() {
               </p>
             </div>
 
-            {/* Remarks */}
             <div>
               <label
                 htmlFor="remarks"

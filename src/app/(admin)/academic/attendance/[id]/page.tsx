@@ -246,7 +246,7 @@ export default function AttendanceDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -291,11 +291,9 @@ export default function AttendanceDetailPage() {
         </div>
       </div>
 
-      {/* Content */}
+      {}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Information */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Info Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Informasi Absensi
@@ -359,7 +357,6 @@ export default function AttendanceDetailPage() {
             </div>
           </div>
 
-          {/* Recording Info */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Informasi Pencatatan
@@ -394,9 +391,7 @@ export default function AttendanceDetailPage() {
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
-          {/* Actions Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Aksi Cepat
@@ -442,7 +437,6 @@ export default function AttendanceDetailPage() {
             </div>
           </div>
 
-          {/* Info Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Informasi

@@ -79,7 +79,7 @@ export default function CreateFinanceTransactionPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -100,7 +100,6 @@ export default function CreateFinanceTransactionPage() {
         </div>
       </div>
 
-      {/* Form */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="border-b border-gray-200 px-6 py-4 bg-gray-50">
           <h2 className="text-lg font-semibold text-gray-900">

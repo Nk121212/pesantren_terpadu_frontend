@@ -80,7 +80,7 @@ export default function SubjectsListPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -111,7 +111,6 @@ export default function SubjectsListPage() {
         </div>
       </div>
 
-      {/* Search and Filter */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -142,7 +141,6 @@ export default function SubjectsListPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between">
@@ -191,7 +189,6 @@ export default function SubjectsListPage() {
         </div>
       </div>
 
-      {/* Subjects Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">

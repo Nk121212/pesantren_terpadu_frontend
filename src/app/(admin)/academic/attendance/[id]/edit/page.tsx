@@ -14,14 +14,13 @@ import {
 } from "lucide-react";
 import {
   academicApi,
+  auditApi,
   Attendance,
   AttendanceStatus,
   CreateAttendanceDto,
   santriApi,
   Santri,
 } from "@/lib/api";
-
-// Helper functions untuk type safety
 function extractDataFromResponse<T>(response: unknown): T[] {
   if (!response) return [];
 
@@ -249,13 +248,13 @@ export default function EditAttendancePage() {
 
       await academicApi.updateAttendance(id, payload);
 
-      // Log audit trail
       try {
         const santriName =
           santriList.find((s) => s.id === Number(formData.santriId))?.name ||
           "Unknown";
 
-        await academicApi.logAction({
+        // PERBAIKAN: Gunakan auditApi.logAction() bukan academicApi.logAction()
+        await auditApi.logAction({
           module: "ATTENDANCE",
           action: "UPDATE",
           recordId: id,
@@ -265,9 +264,6 @@ export default function EditAttendancePage() {
         console.error("Failed to log audit:", auditError);
       }
 
-      alert("Absensi berhasil diperbarui");
-
-      // Kembali ke halaman utama/list absensi
       router.push("/academic/attendance");
     } catch (error) {
       console.error("Failed to update attendance:", error);
@@ -316,7 +312,7 @@ export default function EditAttendancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -357,7 +353,6 @@ export default function EditAttendancePage() {
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
@@ -365,7 +360,6 @@ export default function EditAttendancePage() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Santri Selection */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -404,7 +398,6 @@ export default function EditAttendancePage() {
               </div>
             </div>
 
-            {/* Date */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -435,7 +428,6 @@ export default function EditAttendancePage() {
               </div>
             </div>
 
-            {/* Status */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -467,7 +459,6 @@ export default function EditAttendancePage() {
               )}
             </div>
 
-            {/* Remarks */}
             <div className="md:col-span-2">
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -492,10 +483,9 @@ export default function EditAttendancePage() {
           </div>
         </div>
 
-        {/* Notes */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
             <div>
               <h3 className="font-medium text-yellow-800 mb-1">Perhatian</h3>
               <ul className="text-sm text-yellow-700 space-y-1 list-disc pl-4">

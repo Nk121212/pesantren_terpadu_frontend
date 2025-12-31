@@ -192,7 +192,6 @@ export default function CreateGradePage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Santri Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <div className="flex items-center gap-2">
@@ -223,7 +222,6 @@ export default function CreateGradePage() {
               )}
             </div>
 
-            {/* Subject Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <div className="flex items-center gap-2">
@@ -256,7 +254,6 @@ export default function CreateGradePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Score */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nilai (0-100) *
@@ -301,7 +298,6 @@ export default function CreateGradePage() {
                 </div>
               </div>
 
-              {/* Semester */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Semester *
@@ -329,7 +325,6 @@ export default function CreateGradePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Year */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <div className="flex items-center gap-2">
@@ -360,7 +355,6 @@ export default function CreateGradePage() {
               </div>
             </div>
 
-            {/* Remarks */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <div className="flex items-center gap-2">
@@ -381,7 +375,6 @@ export default function CreateGradePage() {
               </p>
             </div>
 
-            {/* Preview */}
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <h3 className="font-medium text-gray-700 mb-3">Preview Nilai</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -430,7 +423,6 @@ export default function CreateGradePage() {
               </div>
             </div>
 
-            {/* Form Actions */}
             <div className="flex gap-3 pt-4 border-t border-gray-200">
               <Link
                 href="/academic/grades"
@@ -451,7 +443,6 @@ export default function CreateGradePage() {
         )}
       </div>
 
-      {/* Quick Tips */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h4 className="font-medium text-blue-800 mb-2 flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />

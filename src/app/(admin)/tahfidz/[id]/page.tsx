@@ -221,7 +221,7 @@ export default function TahfidzDetailPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
+      {}
       <div className="mb-8">
         <Link
           href="/tahfidz"
@@ -657,7 +657,6 @@ export default function TahfidzDetailPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">
               Statistik Santri

@@ -181,7 +181,6 @@ export default function EditGradePage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        {/* Info Display */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -208,7 +207,6 @@ export default function EditGradePage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Score Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Nilai Baru (0-100) *
@@ -239,7 +237,6 @@ export default function EditGradePage() {
             )}
           </div>
 
-          {/* Remarks Input */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Keterangan
@@ -257,7 +254,6 @@ export default function EditGradePage() {
             </p>
           </div>
 
-          {/* Preview */}
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
             <h3 className="font-medium text-blue-800 mb-3">
               Preview Perubahan
@@ -286,7 +282,6 @@ export default function EditGradePage() {
             </div>
           </div>
 
-          {/* Form Actions */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <Link
               href={`/academic/grades/${gradeId}`}

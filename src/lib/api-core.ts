@@ -1,5 +1,9 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
+/* =======================
+   COMMON TYPES
+======================= */
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -16,6 +20,18 @@ export interface Paginated<T> {
   };
 }
 
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
 export enum Role {
   SUPERADMIN = "SUPERADMIN",
   ADMIN = "ADMIN",
@@ -26,27 +42,42 @@ export enum Role {
   STAFF = "STAFF",
 }
 
-// Token management
+/* =======================
+   TOKEN HANDLING
+======================= */
+
 export const getToken = (): string => {
   if (typeof window === "undefined") return "";
 
   try {
-    const token = localStorage.getItem("token");
-    return token || "";
-  } catch (error) {
-    console.error("Error accessing localStorage:", error);
+    return localStorage.getItem("token") || "";
+  } catch {
     return "";
   }
 };
 
-// Core fetch function
-export async function apiFetch(path: string, options: RequestInit = {}) {
-  const hasLocalStorage =
-    typeof globalThis !== "undefined" && "localStorage" in globalThis;
+export function logout() {
+  if (typeof window === "undefined") return;
 
-  const token = hasLocalStorage
-    ? globalThis.localStorage.getItem("token")
-    : null;
+  localStorage.removeItem("token");
+
+  if ("caches" in window) {
+    caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+  }
+
+  window.location.replace("/login");
+}
+
+/* =======================
+   CORE FETCH
+======================= */
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  const isBrowser = typeof window !== "undefined" && "localStorage" in window;
+  const token = isBrowser ? localStorage.getItem("token") : null;
 
   const extraHeaders =
     options.headers instanceof Headers
@@ -61,10 +92,6 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     ...extraHeaders,
   };
 
-  if (isFormData && "Content-Type" in headers) {
-    delete (headers as Record<string, unknown>)["Content-Type"];
-  }
-
   const url = `${API_BASE_URL}${path}`;
 
   try {
@@ -73,73 +100,38 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
       headers,
     });
 
-    let responseText = "";
-    let payload = null;
+    const payload = await res.json();
 
-    try {
-      responseText = await res.text();
-
-      if (responseText && responseText.trim() !== "") {
-        payload = JSON.parse(responseText);
-      }
-    } catch (parseError) {
-      console.warn(`⚠️ Failed to parse JSON response:`, parseError);
-      console.warn(`📄 Response text that failed to parse:`, responseText);
-      // Continue with payload as null
+    /* =======================
+       401 UNAUTHORIZED
+    ======================= */
+    if (res.status === 401 && isBrowser) {
+      logout();
+      return {
+        success: false,
+        error: "Unauthorized",
+      };
     }
 
     if (!res.ok) {
-      // Handle 401 Unauthorized
-      if (res.status === 401 && hasLocalStorage) {
-        globalThis.localStorage.removeItem("token");
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
-        }
-        throw new Error("Unauthorized - Please login again");
-      }
-
-      // Build error message
-      let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
-
-      if (payload) {
-        if (typeof payload.message === "string") {
-          errorMessage = payload.message;
-        } else if (Array.isArray(payload.message)) {
-          errorMessage = payload.message
-            .map((err: unknown) => {
-              if (typeof err === "string") return err;
-              if (typeof err === "object" && err !== null && "message" in err) {
-                return String((err as { message: string }).message);
-              }
-              return JSON.stringify(err);
-            })
-            .join("; ");
-        } else if (typeof payload.error === "string") {
-          errorMessage = payload.error;
-        }
-      } else if (responseText) {
-        errorMessage = `Server response: ${responseText}`;
-      }
-
-      console.error(`❌ API Error: ${errorMessage}`);
-      throw new Error(errorMessage);
+      throw new Error(payload?.message || payload?.error || res.statusText);
     }
 
-    // Return the payload for successful responses
-    return payload;
+    return payload as ApiResponse<T>;
   } catch (error) {
-    console.error(`💥 API Fetch Error:`, error);
+    console.error("💥 API Fetch Error:", error);
 
-    // Re-throw the error so calling code can handle it
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(`Unknown error: ${String(error)}`);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown API error",
+    };
   }
 }
 
-// Utility functions
+/* =======================
+   QUERY STRING BUILDER
+======================= */
+
 export function buildQueryString<T extends Record<string, unknown>>(
   obj?: T
 ): string {
@@ -150,12 +142,8 @@ export function buildQueryString<T extends Record<string, unknown>>(
   Object.entries(obj).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       if (Array.isArray(value)) {
-        // Handle array values
-        value.forEach((item) => {
-          params.append(key, String(item));
-        });
+        value.forEach((item) => params.append(key, String(item)));
       } else if (typeof value === "object") {
-        // Handle nested objects by stringifying
         params.append(key, JSON.stringify(value));
       } else {
         params.append(key, String(value));
@@ -163,28 +151,6 @@ export function buildQueryString<T extends Record<string, unknown>>(
     }
   });
 
-  const queryString = params.toString();
-  return queryString ? `?${queryString}` : "";
-}
-
-export function logout() {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("token");
-    if ("caches" in window) {
-      caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
-    }
-    window.location.href = "/login";
-  }
-}
-
-export interface PaginationMeta {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  meta: PaginationMeta;
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }

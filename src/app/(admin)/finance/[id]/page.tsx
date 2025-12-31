@@ -238,7 +238,7 @@ export default function FinanceDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <Link
@@ -367,7 +367,6 @@ export default function FinanceDetailPage() {
           </div>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
           {/* Proof Document */}
           {transaction.proofUrl && (

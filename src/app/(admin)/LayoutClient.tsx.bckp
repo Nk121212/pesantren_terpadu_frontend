@@ -23,20 +23,16 @@ function LayoutBody({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Sidebar - dipindah ke atas dan tanpa positioning conflict */}
       <Sidebar />
 
-      {/* Main content area */}
       <div
         className={cn(
           "flex-1 flex flex-col min-h-screen transition-all duration-300",
           open ? "ml-64" : "ml-16"
         )}
       >
-        {/* Navbar - sekarang di dalam main content */}
         <Navbar />
 
-        {/* Page content */}
         <main className="flex-1 px-6 py-6 mt-16">{children}</main>
       </div>
     </div>

@@ -154,7 +154,6 @@ export default function AcademicDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -185,7 +184,6 @@ export default function AcademicDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Link href="/academic/subjects">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
@@ -258,7 +256,6 @@ export default function AcademicDashboardPage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link href="/academic/subjects/create">
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
@@ -311,7 +308,6 @@ export default function AcademicDashboardPage() {
         </Link>
       </div>
 
-      {/* Recent Activities */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -377,7 +373,6 @@ export default function AcademicDashboardPage() {
         </div>
       </div>
 
-      {/* Recent Subjects */}
       {subjects.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
           <div className="px-6 py-4 border-b border-gray-200">
@@ -434,7 +429,6 @@ export default function AcademicDashboardPage() {
         </div>
       )}
 
-      {/* Academic Calendar Placeholder */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">

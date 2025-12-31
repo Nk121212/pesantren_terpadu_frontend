@@ -137,7 +137,6 @@ export default function GradeDetailPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
@@ -178,11 +177,8 @@ export default function GradeDetailPage() {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Grade Info */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Score Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-6">
               <div>
@@ -217,7 +213,6 @@ export default function GradeDetailPage() {
               </div>
             </div>
 
-            {/* Score Visualization */}
             <div className="mt-8 pt-6 border-t border-gray-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">
@@ -243,7 +238,6 @@ export default function GradeDetailPage() {
             </div>
           </div>
 
-          {/* Remarks Card */}
           {grade.remarks && (
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
@@ -260,7 +254,6 @@ export default function GradeDetailPage() {
             </div>
           )}
 
-          {/* Metadata Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Informasi Teknis
@@ -292,9 +285,7 @@ export default function GradeDetailPage() {
           </div>
         </div>
 
-        {/* Right Column - Related Info */}
         <div className="space-y-6">
-          {/* Santri Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <User className="w-5 h-5 text-purple-600" />
@@ -324,7 +315,6 @@ export default function GradeDetailPage() {
             </Link>
           </div>
 
-          {/* Subject Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <BookOpen className="w-5 h-5 text-green-600" />
@@ -358,7 +348,6 @@ export default function GradeDetailPage() {
             </Link>
           </div>
 
-          {/* Actions Card */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Aksi Cepat
@@ -399,7 +388,6 @@ export default function GradeDetailPage() {
         </div>
       </div>
 
-      {/* Bottom Actions */}
       <div className="flex justify-between items-center pt-6 border-t border-gray-200">
         <div className="text-sm text-gray-500">
           Data nilai terakhir diperbarui:{" "}

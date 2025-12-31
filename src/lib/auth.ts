@@ -1,10 +1,6 @@
-// src\lib\auth.ts
 "use client";
 
 import { apiFetch } from "./api";
-// Hapus import { redirect } dari 'next/navigation' di sini,
-// karena kita menggunakan window.location.href (hard redirect) di LoginPage
-// jika Anda tetap ingin menggunakan redirect("/login") di logout, biarkan.
 
 export async function loginUser(credentials: {
   email: string;
@@ -30,12 +26,13 @@ export async function loginUser(credentials: {
 
     if (data.data?.access_token) {
       const token = data.data.access_token;
+      const user = data.data.user;
+      const menu = data.data.menu || [];
 
-      // PERBAIKAN 1: Simpan ke LocalStorage (Untuk apiFetch)
       localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("menu", JSON.stringify(menu));
 
-      // PERBAIKAN 2: Simpan ke Cookie (Untuk Middleware)
-      // max-age=86400 sama dengan 24 jam (60 * 60 * 24)
       document.cookie = `token=${token}; path=/; max-age=${
         60 * 60 * 24
       }; SameSite=Lax`;
@@ -44,17 +41,39 @@ export async function loginUser(credentials: {
     return data;
   } catch (error) {
     console.error("Login error:", error);
-    // Lebih baik melempar objek error daripada hanya pesan string
     throw error;
   }
 }
 
 export function logoutUser() {
   localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("menu");
   document.cookie = "token=; path=/; max-age=0; SameSite=Lax";
   window.location.href = "/login";
 }
 
+interface UserProfileResponse {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+  };
+  menu: unknown[];
+}
+
 export async function getUserProfile() {
-  return apiFetch("/auth/me");
+  try {
+    const response = await apiFetch<UserProfileResponse>("/auth/me");
+
+    console.log("getUserProfile response:", response);
+    return response;
+  } catch (error) {
+    console.error("Error getting user profile:", error);
+    return {
+      success: false,
+      error: "Failed to get user profile",
+    };
+  }
 }

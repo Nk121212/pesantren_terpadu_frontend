@@ -213,7 +213,7 @@ export default function EditSantriPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-center gap-4">
         <Link
           href={`/santri/${id}`}
@@ -241,7 +241,6 @@ export default function EditSantriPage() {
         </div>
       )}
 
-      {/* Form */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-6 p-4 bg-blue-50 rounded-lg">
           <User className="w-5 h-5 text-blue-600" />

@@ -179,7 +179,7 @@ export default function SavingsDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-center gap-4">
         <Link
           href="/tabungan"

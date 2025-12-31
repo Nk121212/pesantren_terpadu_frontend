@@ -63,7 +63,7 @@ export default function CreateSubjectPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
+      {}
       <div className="flex items-center gap-4">
         <Link
           href="/academic/subjects"
@@ -82,7 +82,6 @@ export default function CreateSubjectPage() {
         </div>
       </div>
 
-      {/* Form */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>

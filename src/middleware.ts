@@ -1,21 +1,46 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+const PROTECTED_PATHS = [
+  "/dashboard",
+  "/counseling",
+  "/santri",
+  "/tagihan",
+  "/penggajian",
+];
 
 export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Skip public paths
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+
+  const isProtected = PROTECTED_PATHS.some((path) => pathname.startsWith(path));
+
+  if (!isProtected) {
+    return NextResponse.next();
+  }
+
+  // Ambil token dari cookie / header
   const token =
-    req.cookies.get("token")?.value || req.headers.get("Authorization");
+    req.cookies.get("token")?.value ||
+    req.headers.get("authorization")?.replace("Bearer ", "");
 
-  const protectedRoutes = ["/dashboard", "/users", "/invoices"];
-
-  if (protectedRoutes.some((path) => req.nextUrl.pathname.startsWith(path))) {
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
+  // ❌ TIDAK ADA TOKEN → REDIRECT
+  if (!token) {
+    const loginUrl = new URL("/login", req.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/users/:path*", "/invoices/:path*"],
+  matcher: ["/((?!_next|favicon.ico).*)"],
 };

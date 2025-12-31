@@ -335,7 +335,6 @@ export default function CreateAttendancePage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Link
           href="/academic/attendance"
@@ -354,7 +353,6 @@ export default function CreateAttendancePage() {
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
@@ -362,7 +360,6 @@ export default function CreateAttendancePage() {
           </h2>
 
           <div className="space-y-6">
-            {/* Santri Selection */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -402,7 +399,6 @@ export default function CreateAttendancePage() {
               </div>
             </div>
 
-            {/* Date */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -433,7 +429,6 @@ export default function CreateAttendancePage() {
               </div>
             </div>
 
-            {/* Status Selection with Cards */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Status Kehadiran <span className="text-red-500">*</span>
@@ -472,7 +467,6 @@ export default function CreateAttendancePage() {
               )}
             </div>
 
-            {/* Recorded By */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -514,7 +508,6 @@ export default function CreateAttendancePage() {
               </div>
             </div>
 
-            {/* Remarks */}
             <div>
               <label
                 className="block text-sm font-medium text-gray-700 mb-2"
@@ -539,7 +532,6 @@ export default function CreateAttendancePage() {
           </div>
         </div>
 
-        {/* Notes */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -563,7 +555,6 @@ export default function CreateAttendancePage() {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex gap-3 pt-4">
           <Link
             href="/academic/attendance"

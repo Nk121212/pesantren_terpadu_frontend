@@ -265,7 +265,6 @@ export default function AttendancePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -296,7 +295,6 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -369,7 +367,6 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -437,7 +434,6 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {/* Attendance Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">

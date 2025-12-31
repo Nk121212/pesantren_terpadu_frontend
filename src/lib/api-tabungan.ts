@@ -1,5 +1,5 @@
 // lib/api-tabungan.ts
-import { apiFetch, ApiResponse, getToken, API_BASE_URL } from "./api-core";
+import { apiFetch, ApiResponse } from "./api-core";
 
 export interface Savings {
   id: number;
@@ -65,6 +65,70 @@ export interface ApproveTransactionRequest {
   approve: boolean;
 }
 
+// Type guard functions
+function isSavings(data: unknown): data is Savings {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  return (
+    typeof obj.id === "number" &&
+    typeof obj.santriId === "number" &&
+    typeof obj.balance === "string" &&
+    typeof obj.createdAt === "string" &&
+    typeof obj.updatedAt === "string" &&
+    (obj.santriName === undefined || typeof obj.santriName === "string")
+  );
+}
+
+function isSavingsArray(data: unknown): data is Savings[] {
+  return Array.isArray(data) && data.every(isSavings);
+}
+
+function isSavingsBalance(data: unknown): data is SavingsBalance {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  return (
+    typeof obj.santriId === "number" &&
+    typeof obj.balance === "number" &&
+    typeof obj.totalIncome === "number" &&
+    typeof obj.totalExpense === "number"
+  );
+}
+
+function isSavingsBalanceArray(data: unknown): data is SavingsBalance[] {
+  return Array.isArray(data) && data.every(isSavingsBalance);
+}
+
+function isSavingsTransaction(data: unknown): data is SavingsTransaction {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+
+  const validTypes = ["INCOME", "EXPENSE"] as const;
+  const validStatuses = ["PENDING", "APPROVED", "REJECTED"] as const;
+
+  return (
+    typeof obj.id === "number" &&
+    typeof obj.savingsId === "number" &&
+    typeof obj.amount === "number" &&
+    typeof obj.createdBy === "number" &&
+    typeof obj.createdAt === "string" &&
+    typeof obj.updatedAt === "string" &&
+    validTypes.includes(obj.type as "INCOME" | "EXPENSE") &&
+    validStatuses.includes(obj.status as "PENDING" | "APPROVED" | "REJECTED") &&
+    (obj.description === undefined || typeof obj.description === "string") &&
+    (obj.proofUrl === undefined || typeof obj.proofUrl === "string") &&
+    (obj.approvedBy === undefined || typeof obj.approvedBy === "number") &&
+    (obj.approvedAt === undefined || typeof obj.approvedAt === "string")
+  );
+}
+
+function isSavingsTransactionArray(
+  data: unknown
+): data is SavingsTransaction[] {
+  return Array.isArray(data) && data.every(isSavingsTransaction);
+}
+
 export const parseBalance = (balance: string | number): number => {
   if (typeof balance === "number") return balance;
   return parseFloat(balance) || 0;
@@ -77,7 +141,16 @@ export const tabunganApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isSavings(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid savings data structure:", res.data);
+        return {
+          success: false,
+          error: "Data tabungan tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating savings account:", error);
       return {
@@ -93,7 +166,16 @@ export const tabunganApi = {
   async list(): Promise<ApiResponse<Savings[]>> {
     try {
       const res = await apiFetch(`/savings`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isSavingsArray(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid savings array structure:", res.data);
+        return {
+          success: false,
+          error: "Data tabungan array tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching savings list:", error);
       return {
@@ -109,7 +191,16 @@ export const tabunganApi = {
   async getById(id: number): Promise<ApiResponse<Savings>> {
     try {
       const res = await apiFetch(`/savings/${id}`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isSavings(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid savings data structure:", res.data);
+        return {
+          success: false,
+          error: "Data tabungan tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching savings by ID:", error);
       return {
@@ -127,7 +218,16 @@ export const tabunganApi = {
       const res = await apiFetch(`/savings/balance/${santriId}`, {
         method: "GET",
       });
-      return { success: true, data: res.data };
+
+      if (isSavingsBalance(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid savings balance structure:", res.data);
+        return {
+          success: false,
+          error: "Data saldo tabungan tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching balance:", error);
       return {
@@ -152,7 +252,16 @@ export const tabunganApi = {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      return { success: true, data: res.data };
+
+      if (isSavingsTransaction(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid transaction data structure:", res.data);
+        return {
+          success: false,
+          error: "Data transaksi tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating transaction:", error);
       return {
@@ -170,7 +279,16 @@ export const tabunganApi = {
       const res = await apiFetch(`/savings/transaction/${savingsId}`, {
         method: "GET",
       });
-      return { success: true, data: res.data };
+
+      if (isSavingsTransactionArray(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid transactions array structure:", res.data);
+        return {
+          success: false,
+          error: "Data transaksi array tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching transactions:", error);
       return {
@@ -195,7 +313,16 @@ export const tabunganApi = {
           body: JSON.stringify(data),
         }
       );
-      return { success: true, data: res.data };
+
+      if (isSavingsTransaction(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid transaction data structure:", res.data);
+        return {
+          success: false,
+          error: "Data transaksi tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error approving transaction:", error);
       return {
@@ -210,7 +337,7 @@ export const tabunganApi = {
     try {
       const savingsRes = await this.list();
 
-      if (!savingsRes.success || !Array.isArray(savingsRes.data)) {
+      if (!savingsRes.success || !isSavingsArray(savingsRes.data)) {
         return {
           success: false,
           error: "Gagal mengambil data tabungan",

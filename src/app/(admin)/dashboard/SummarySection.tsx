@@ -65,8 +65,6 @@ export default function SummarySection() {
     );
   }
 
-  console.log("dahsadsd", data);
-
   return (
     <div className="space-y-8">
       {/* Finance Cards */}

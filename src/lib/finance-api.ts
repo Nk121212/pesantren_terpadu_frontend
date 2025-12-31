@@ -1,6 +1,5 @@
 import { apiFetch, ApiResponse } from "./api";
 
-// Export types
 export interface FinanceTransaction {
   id: number;
   type: "INCOME" | "EXPENSE";
@@ -40,7 +39,6 @@ export interface FinanceStats {
 }
 
 export const financeApi = {
-  // Create transaction dengan file upload - FIXED untuk NestJS dengan api prefix
   async create(
     data: CreateTransactionDto
   ): Promise<ApiResponse<FinanceTransaction>> {
@@ -50,297 +48,135 @@ export const financeApi = {
       formData.append("category", data.category);
       formData.append("amount", data.amount.toString());
 
-      if (data.description) {
-        formData.append("description", data.description);
-      }
-
-      if (data.createdBy) {
+      if (data.description) formData.append("description", data.description);
+      if (data.createdBy)
         formData.append("createdBy", data.createdBy.toString());
-      }
-
-      if (data.proof) {
-        formData.append("proof", data.proof);
-      }
+      if (data.proof) formData.append("proof", data.proof);
 
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No authentication token found");
-      }
+      if (!token) throw new Error("No authentication token found");
 
-      // Gunakan apiFetch untuk konsistensi, tapi handle FormData khusus
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/finance`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
-            // JANGAN set Content-Type untuk FormData, browser akan set otomatis
           },
           body: formData,
         }
       );
 
       if (!response.ok) {
-        let errorMessage = `Error ${response.status}: ${response.statusText}`;
+        let message = "Failed to create transaction";
         try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        } catch (jsonError) {
-          const textError = await response.text();
+          const err = await response.json();
+          message = err.message ?? message;
+        } catch {
+          // ignore
         }
-        throw new Error(errorMessage);
+        return { success: false, error: message };
       }
 
-      const result = await response.json();
+      const result: FinanceTransaction = await response.json();
       return { success: true, data: result };
     } catch (error) {
-      console.error("❌ Error in finance create:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to create transaction" };
-    }
-  },
-
-  // Get transaction by ID
-  async get(id: number): Promise<ApiResponse<FinanceTransaction>> {
-    try {
-      const response = await apiFetch(`/finance/${id}`, {
-        method: "GET",
-      });
-
-      // Handle response format
-      if (response && typeof response === "object") {
-        if (response.data) {
-          return { success: true, data: response.data };
-        } else {
-          return { success: true, data: response };
-        }
-      }
-
       return {
         success: false,
-        error: "Invalid response format",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create transaction",
       };
-    } catch (error) {
-      console.error("❌ Error in finance get:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to fetch transaction" };
     }
   },
 
-  // List transactions dengan pagination
+  async get(id: number): Promise<ApiResponse<FinanceTransaction>> {
+    return apiFetch<FinanceTransaction>(`/finance/${id}`, {
+      method: "GET",
+    });
+  },
+
   async list(params?: {
     skip?: number;
     take?: number;
     type?: "INCOME" | "EXPENSE";
     status?: string;
   }): Promise<ApiResponse<FinanceTransaction[]>> {
-    try {
-      let url = "/finance";
-      const queryParams = new URLSearchParams();
+    const query = new URLSearchParams();
 
-      if (params?.skip !== undefined)
-        queryParams.append("skip", params.skip.toString());
-      if (params?.take !== undefined)
-        queryParams.append("take", params.take.toString());
-      if (params?.type) queryParams.append("type", params.type);
-      if (params?.status) queryParams.append("status", params.status);
+    if (params?.skip !== undefined) query.append("skip", String(params.skip));
+    if (params?.take !== undefined) query.append("take", String(params.take));
+    if (params?.type) query.append("type", params.type);
+    if (params?.status) query.append("status", params.status);
 
-      const queryString = queryParams.toString();
-      if (queryString) url += `?${queryString}`;
+    const url = query.toString() ? `/finance?${query.toString()}` : "/finance";
 
-      const response = await apiFetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      // Handle berbagai format response
-      if (Array.isArray(response)) {
-        return { success: true, data: response };
-      }
-
-      if (response && typeof response === "object") {
-        if (Array.isArray(response.data)) {
-          return { success: true, data: response.data };
-        } else if (response.data === null || response.data === undefined) {
-          return { success: true, data: [] };
-        } else {
-          return { success: true, data: [] };
-        }
-      }
-
-      return { success: true, data: [] };
-    } catch (error) {
-      console.error("❌ Error in finance list:", error);
-
-      if (error instanceof Error) {
-        return {
-          success: false,
-          error: error.message || "Failed to fetch transactions",
-        };
-      }
-
-      return {
-        success: false,
-        error: "Failed to fetch transactions",
-      };
-    }
+    return apiFetch<FinanceTransaction[]>(url, { method: "GET" });
   },
 
-  // Update transaction
   async update(
     id: number,
     data: UpdateTransactionDto
   ): Promise<ApiResponse<FinanceTransaction>> {
-    try {
-      const response = await apiFetch(`/finance/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      });
-
-      if (response && typeof response === "object") {
-        if (response.data) {
-          return { success: true, data: response.data };
-        } else {
-          return { success: true, data: response };
-        }
-      }
-
-      return { success: false, error: "Invalid response format" };
-    } catch (error) {
-      console.error("❌ Error in finance update:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to update transaction" };
-    }
+    return apiFetch<FinanceTransaction>(`/finance/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   },
 
-  // Delete transaction
   async delete(id: number): Promise<ApiResponse<void>> {
-    try {
-      await apiFetch(`/finance/${id}`, { method: "DELETE" });
-      return { success: true };
-    } catch (error) {
-      console.error("❌ Error in finance delete:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to delete transaction" };
-    }
+    return apiFetch<void>(`/finance/${id}`, {
+      method: "DELETE",
+    });
   },
 
-  // Approve transaction
   async approve(
     id: number,
     userId: number
   ): Promise<ApiResponse<FinanceTransaction>> {
-    try {
-      const response = await apiFetch(`/finance/approve/${id}/${userId}`, {
-        method: "PATCH",
-      });
-
-      if (response && typeof response === "object") {
-        if (response.data) {
-          return { success: true, data: response.data };
-        } else {
-          return { success: true, data: response };
-        }
-      }
-
-      return { success: false, error: "Invalid response format" };
-    } catch (error) {
-      console.error("❌ Error in finance approve:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to approve transaction" };
-    }
+    return apiFetch<FinanceTransaction>(`/finance/approve/${id}/${userId}`, {
+      method: "PATCH",
+    });
   },
 
-  // Reject transaction
   async reject(
     id: number,
     userId: number
   ): Promise<ApiResponse<FinanceTransaction>> {
-    try {
-      const response = await apiFetch(`/finance/reject/${id}/${userId}`, {
-        method: "PATCH",
-      });
-
-      if (response && typeof response === "object") {
-        if (response.data) {
-          return { success: true, data: response.data };
-        } else {
-          return { success: true, data: response };
-        }
-      }
-
-      return { success: false, error: "Invalid response format" };
-    } catch (error) {
-      console.error("❌ Error in finance reject:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to reject transaction" };
-    }
+    return apiFetch<FinanceTransaction>(`/finance/reject/${id}/${userId}`, {
+      method: "PATCH",
+    });
   },
 
-  // Get finance statistics
   async getStats(): Promise<ApiResponse<FinanceStats>> {
-    try {
-      const transactionsRes = await this.list({ take: 1000 });
+    const res = await this.list({ take: 1000 });
 
-      if (!transactionsRes.success) {
-        return {
-          success: false,
-          error:
-            transactionsRes.error || "Failed to fetch transactions for stats",
-        };
-      }
-
-      const transactions = transactionsRes.data || [];
-
-      const stats: FinanceStats = {
-        totalIncome: transactions
-          .filter((t) => t.type === "INCOME" && t.status === "APPROVED")
-          .reduce((sum, t) => sum + Number(t.amount), 0),
-        totalExpense: transactions
-          .filter((t) => t.type === "EXPENSE" && t.status === "APPROVED")
-          .reduce((sum, t) => sum + Number(t.amount), 0),
-        balance: 0,
-        pendingTransactions: transactions.filter((t) => t.status === "PENDING")
-          .length,
+    if (!res.success || !res.data) {
+      return {
+        success: false,
+        error: res.error || "Failed to fetch finance stats",
       };
-
-      stats.balance = stats.totalIncome - stats.totalExpense;
-
-      return { success: true, data: stats };
-    } catch (error) {
-      console.error("❌ Error in finance stats:", error);
-
-      if (error instanceof Error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: false, error: "Failed to fetch finance stats" };
     }
+
+    const transactions = res.data;
+
+    const totalIncome = transactions
+      .filter((t) => t.type === "INCOME" && t.status === "APPROVED")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const totalExpense = transactions
+      .filter((t) => t.type === "EXPENSE" && t.status === "APPROVED")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const stats: FinanceStats = {
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
+      pendingTransactions: transactions.filter((t) => t.status === "PENDING")
+        .length,
+    };
+
+    return { success: true, data: stats };
   },
 };

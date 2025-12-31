@@ -32,6 +32,7 @@ export interface CanteenTransaction {
   status: "PENDING" | "APPROVED" | "REJECTED";
   proofUrl?: string;
   createdAt: string;
+  savingsTransactionId?: number; // ← TAMBAH INI
   santri?: {
     id: number;
     name: string;
@@ -63,6 +64,97 @@ export interface CreateCanteenTxDto {
   createdBy?: number;
 }
 
+// Type guard functions
+function isMerchant(data: unknown): data is Merchant {
+  if (!data || typeof data !== "object") return false;
+  const obj = data as Record<string, unknown>;
+  return (
+    typeof obj.id === "number" &&
+    typeof obj.userId === "number" &&
+    typeof obj.name === "string" &&
+    typeof obj.balance === "string" &&
+    typeof obj.createdAt === "string" &&
+    typeof obj.updatedAt === "string"
+  );
+}
+
+function isMerchantArray(data: unknown): data is Merchant[] {
+  return Array.isArray(data) && data.every(isMerchant);
+}
+
+function isCanteenTransaction(data: unknown): data is CanteenTransaction {
+  if (!data || typeof data !== "object") return false;
+
+  const obj = data as Record<string, unknown>;
+
+  const validPaymentMethods = ["QRIS", "VA", "EWALLET", "BANK_TRANSFER"];
+  const validStatuses = ["PENDING", "APPROVED", "REJECTED"];
+
+  // Handle amount yang bisa string atau number
+  const amount = obj.amount;
+  const isAmountValid =
+    typeof amount === "number" ||
+    (typeof amount === "string" &&
+      !isNaN(Number(amount)) &&
+      amount.trim() !== "");
+
+  // Handle savingsTransactionId yang bisa string, number, atau undefined
+  const savingsTransactionId = obj.savingsTransactionId;
+  const isSavingsTxIdValid =
+    savingsTransactionId === undefined ||
+    typeof savingsTransactionId === "number" ||
+    (typeof savingsTransactionId === "string" &&
+      !isNaN(Number(savingsTransactionId)));
+
+  // Validate required fields
+  const hasRequiredFields =
+    (typeof obj.id === "number" ||
+      (typeof obj.id === "string" && !isNaN(Number(obj.id)))) &&
+    (typeof obj.santriId === "number" ||
+      (typeof obj.santriId === "string" && !isNaN(Number(obj.santriId)))) &&
+    (typeof obj.merchantId === "number" ||
+      (typeof obj.merchantId === "string" && !isNaN(Number(obj.merchantId)))) &&
+    isAmountValid &&
+    typeof obj.createdAt === "string" &&
+    validPaymentMethods.includes(obj.paymentMethod as string) &&
+    validStatuses.includes(obj.status as string);
+
+  if (!hasRequiredFields) {
+    console.error("Missing required fields:", {
+      id: obj.id,
+      idType: typeof obj.id,
+      santriId: obj.santriId,
+      santriIdType: typeof obj.santriId,
+      merchantId: obj.merchantId,
+      merchantIdType: typeof obj.merchantId,
+      amount: obj.amount,
+      amountType: typeof obj.amount,
+      isAmountValid,
+      createdAt: obj.createdAt,
+      createdAtType: typeof obj.createdAt,
+      paymentMethod: obj.paymentMethod,
+      isValidPayment: validPaymentMethods.includes(obj.paymentMethod as string),
+      status: obj.status,
+      isValidStatus: validStatuses.includes(obj.status as string),
+    });
+    return false;
+  }
+
+  // Validate optional fields
+  const optionalFieldsValid =
+    (obj.description === undefined || typeof obj.description === "string") &&
+    (obj.proofUrl === undefined || typeof obj.proofUrl === "string") &&
+    isSavingsTxIdValid;
+
+  return optionalFieldsValid;
+}
+
+function isCanteenTransactionArray(
+  data: unknown
+): data is CanteenTransaction[] {
+  return Array.isArray(data) && data.every(isCanteenTransaction);
+}
+
 export const canteenApi = {
   async createMerchant(
     data: CreateMerchantDto
@@ -72,7 +164,16 @@ export const canteenApi = {
         method: "POST",
         body: JSON.stringify(data),
       });
-      return { success: true, data: res.data };
+
+      if (isMerchant(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid merchant data structure:", res.data);
+        return {
+          success: false,
+          error: "Data merchant tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error creating merchant:", error);
       return {
@@ -86,7 +187,16 @@ export const canteenApi = {
   async getMerchant(id: number): Promise<ApiResponse<Merchant>> {
     try {
       const res = await apiFetch(`/canteen/merchant/${id}`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isMerchant(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid merchant data structure:", res.data);
+        return {
+          success: false,
+          error: "Data merchant tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching merchant:", error);
       return {
@@ -106,7 +216,16 @@ export const canteenApi = {
     try {
       const qs = buildQueryString(params);
       const res = await apiFetch(`/canteen/merchant${qs}`, { method: "GET" });
-      return { success: true, data: res.data };
+
+      if (isMerchantArray(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid merchants array structure:", res.data);
+        return {
+          success: false,
+          error: "Data merchants tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching merchants:", error);
       return {
@@ -136,25 +255,150 @@ export const canteenApi = {
           formData.append("createdBy", data.createdBy.toString());
         formData.append("proof", file);
 
+        // Debug: log FormData contents
+        console.log("📤 FormData contents:");
+        for (const pair of formData.entries()) {
+          console.log(pair[0] + ": ", pair[1]);
+        }
+
         const response = await fetch(`${API_BASE_URL}/canteen/transaction`, {
           method: "POST",
           headers: { Authorization: `Bearer ${getToken()}` },
           body: formData,
         });
 
+        console.log("📥 Response status:", response.status);
+        console.log("📥 Response ok:", response.ok);
+
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Error: ${response.status}`);
+          const errorText = await response.text();
+          console.error("❌ Response error text:", errorText);
+
+          let errorMessage = `Error: ${response.status}`;
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.message || errorText;
+          } catch {
+            errorMessage = errorText || `Error: ${response.status}`;
+          }
+
+          throw new Error(errorMessage);
         }
 
         const result = await response.json();
-        return { success: true, data: result };
+        console.log("✅ Full API response:", result);
+
+        // Type check for file upload response
+        if (result && typeof result === "object") {
+          // Case 1: Response sudah dalam format ApiResponse {success, data, message}
+          if ("success" in result && "data" in result && "message" in result) {
+            const apiResponse = result as {
+              success: boolean;
+              data: unknown;
+              message: string;
+            };
+
+            if (apiResponse.success) {
+              // Normalize and convert data types
+              const transactionData = apiResponse.data;
+
+              if (transactionData && typeof transactionData === "object") {
+                const tx = transactionData as Record<string, unknown>;
+
+                // Convert string fields to numbers where needed
+                const normalizedData: CanteenTransaction = {
+                  id:
+                    typeof tx.id === "string"
+                      ? Number(tx.id)
+                      : (tx.id as number),
+                  santriId:
+                    typeof tx.santriId === "string"
+                      ? Number(tx.santriId)
+                      : (tx.santriId as number),
+                  merchantId:
+                    typeof tx.merchantId === "string"
+                      ? Number(tx.merchantId)
+                      : (tx.merchantId as number),
+                  amount:
+                    typeof tx.amount === "string"
+                      ? Number(tx.amount)
+                      : (tx.amount as number),
+                  paymentMethod:
+                    tx.paymentMethod as CanteenTransaction["paymentMethod"],
+                  status: tx.status as CanteenTransaction["status"],
+                  createdAt: tx.createdAt as string,
+                  description: tx.description as string | undefined,
+                  proofUrl: tx.proofUrl as string | undefined,
+                  savingsTransactionId: tx.savingsTransactionId
+                    ? typeof tx.savingsTransactionId === "string"
+                      ? Number(tx.savingsTransactionId)
+                      : (tx.savingsTransactionId as number)
+                    : undefined,
+                };
+
+                // Validate required fields
+                if (
+                  normalizedData.id &&
+                  normalizedData.santriId &&
+                  normalizedData.merchantId &&
+                  normalizedData.amount &&
+                  normalizedData.createdAt &&
+                  normalizedData.paymentMethod &&
+                  normalizedData.status
+                ) {
+                  console.log(
+                    "✅ Transaction data normalized successfully:",
+                    normalizedData
+                  );
+                  return { success: true, data: normalizedData };
+                } else {
+                  console.error(
+                    "❌ Missing required fields after normalization:",
+                    normalizedData
+                  );
+                }
+              } else {
+                console.error(
+                  "❌ Transaction data is not an object:",
+                  transactionData
+                );
+              }
+            } else {
+              // API returned success: false
+              return {
+                success: false,
+                error: apiResponse.message || "Upload gagal",
+              };
+            }
+          }
+          // Case 2: Response langsung data transaction (tanpa wrapper)
+          else if (isCanteenTransaction(result)) {
+            return { success: true, data: result };
+          }
+        }
+
+        // Jika semua validasi gagal
+        console.error("❌ Invalid transaction data from file upload:", result);
+        return {
+          success: false,
+          error: "Data transaksi dari upload file tidak valid",
+        };
       } else {
+        // Original code for non-file upload
         const res = await apiFetch(`/canteen/transaction`, {
           method: "POST",
           body: JSON.stringify(data),
         });
-        return { success: true, data: res.data };
+
+        if (isCanteenTransaction(res.data)) {
+          return { success: true, data: res.data };
+        } else {
+          console.error("Invalid transaction data structure:", res.data);
+          return {
+            success: false,
+            error: "Data transaksi tidak valid",
+          };
+        }
       }
     } catch (error) {
       console.error("Error creating transaction:", error);
@@ -173,7 +417,16 @@ export const canteenApi = {
       const res = await apiFetch(`/canteen/transactions/${merchantId}`, {
         method: "GET",
       });
-      return { success: true, data: res.data };
+
+      if (isCanteenTransactionArray(res.data)) {
+        return { success: true, data: res.data };
+      } else {
+        console.error("Invalid transactions array structure:", res.data);
+        return {
+          success: false,
+          error: "Data transaksi tidak valid",
+        };
+      }
     } catch (error) {
       console.error("Error fetching transactions:", error);
       return {

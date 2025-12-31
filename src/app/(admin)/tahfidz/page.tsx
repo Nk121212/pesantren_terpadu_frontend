@@ -477,7 +477,7 @@ export default function TahfidzDashboardPage() {
         </div>
       )}
 
-      {/* Header */}
+      {}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -669,7 +669,6 @@ export default function TahfidzDashboardPage() {
         </div>
       </div>
 
-      {/* Search and Filter */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
